@@ -1,0 +1,43 @@
+# windows .gitignore
+__pycache__/
+*.pyc
+*.pyo
+.venv*/
+.venv\
+venv/
+dist/
+build/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# 数据：模型文件 + 对象存储 + logs（大文件不进 Git）
+/data/models/**
+!/data/models/.gitkeep
+/data/logs/**
+!/data/logs/.gitkeep
+data/checkpoint.db
+
+# 导出结果
+output/
+output/**
+.tmp_uploads/
+
+# Milvus / MySQL / Redis 本地容器数据挂载（直接用 docker volume）
+docker/data/
+
+# 真实 .env 不进 Git
+conf/.env
+
+# agent 工作记忆（私有跨会话日志，不进仓库）
+.workbuddy/
+
+# 写权限测试残留（1 字节 "x" 文件夹验证残留）
+**/_wtest.txt

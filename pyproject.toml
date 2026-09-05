@@ -1,0 +1,67 @@
+[project]
+name = "project-agent"
+version = "1.0.0"
+description = "Company pre-research project: two production-grade Agents - RAG Knowledge Base + AI Coding Copilot (LangGraph)"
+readme = "README.md"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    # Web
+    "fastapi[standard]>=0.115",
+    "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.17",
+    "sse-starlette>=2.1",
+    # LangChain / LangGraph
+    "langchain>=0.3",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.2",
+    "langchain-community>=0.3",
+    "langgraph>=0.2.50",
+    "langgraph-checkpoint-sqlite>=1.0",
+    # Embedding + Rerank
+    "FlagEmbedding>=1.2.11",
+    "sentence-transformers>=3.0",
+    # Vector DB
+    "pymilvus>=2.4",
+    # Redis cache
+    "redis>=5.0",
+    # PDF parsing (lightweight fallback: markdown; advanced: import magic-pdf optional)
+    "pypdf>=5.0",
+    "markdownify>=0.13",
+    # Storage
+    "minio>=7.2",
+    # MySQL + ORM
+    "sqlalchemy[asyncio]>=2.0",
+    "aiomysql>=0.2",
+    # Infra
+    "python-dotenv>=1.0",
+    "pydantic-settings>=2.6",
+    "loguru>=0.7",
+    "httpx>=0.28",
+    "regex>=2024.9",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=5",
+]
+
+[project.scripts]
+rag-import = "project_agent.rag_kb.cli:cli_import"
+rag-chat   = "project_agent.rag_kb.cli:cli_chat"
+copilot-run    = "project_agent.copilot.cli:cli_run"
+agent-api     = "project_agent.api.server:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"

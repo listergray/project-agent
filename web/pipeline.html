@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>代码助手 · 流水线</title>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#0f172a;
+    background:
+      radial-gradient(1100px 700px at 8% -10%, #ede9fe 0%, transparent 55%),
+      radial-gradient(900px 600px at 100% 10%, #fce7f3 0%, transparent 50%),
+      radial-gradient(700px 500px at 50% 110%, #dbeafe 0%, transparent 55%),
+      linear-gradient(180deg,#faf7ff 0%,#f5f3ff 100%);
+    min-height:100vh;
+  }
+
+  /* ===== 顶栏 ===== */
+  .nav{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:18px 36px;
+    position:sticky;top:0;z-index:50;
+    background:rgba(255,255,255,.7);backdrop-filter:blur(14px);
+    border-bottom:1px solid rgba(226,232,240,.6);
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;color:#0f172a;text-decoration:none;}
+  .brand-logo{
+    width:32px;height:32px;border-radius:9px;
+    background:linear-gradient(135deg,#7c3aed,#5b21b6);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;
+    box-shadow:0 4px 14px rgba(124,58,237,.35);
+  }
+  .crumbs{display:flex;align-items:center;gap:6px;font-size:13px;color:#64748b;}
+  .crumbs a{color:#64748b;text-decoration:none;transition:color .15s;}
+  .crumbs a:hover{color:#7c3aed;}
+  .crumbs .sep{color:#cbd5e1;}
+  .crumbs .now{color:#0f172a;font-weight:500;}
+  .nav-right{display:flex;align-items:center;gap:8px;}
+  .ghost-btn{
+    border:1px solid #e2e8f0;background:rgba(255,255,255,.7);
+    backdrop-filter:blur(10px);
+    border-radius:999px;padding:6px 14px;font-size:13px;color:#0f172a;
+    cursor:pointer;text-decoration:none;transition:all .18s ease;
+  }
+  .ghost-btn:hover{background:#fff;border-color:#cbd5e1;}
+
+  /* ===== 页面布局 ===== */
+  .wrap{
+    max-width:1280px;margin:0 auto;padding:36px 36px 60px;
+  }
+  .page-head{
+    margin-bottom:28px;
+  }
+  .page-head .tag{
+    display:inline-flex;align-items:center;gap:6px;
+    background:linear-gradient(135deg,#ede9fe,#ddd6fe);
+    color:#7c3aed;padding:5px 12px;border-radius:999px;
+    font-size:12px;font-weight:600;margin-bottom:14px;
+  }
+  .page-head h1{
+    margin:0 0 8px;font-size:32px;font-weight:700;
+    background:linear-gradient(135deg,#0f172a 30%,#7c3aed);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    letter-spacing:-.5px;
+  }
+  .page-head p{margin:0;font-size:14px;color:#64748b;line-height:1.7;max-width:720px;}
+
+  /* ===== 两栏布局 ===== */
+  .layout{
+    display:grid;grid-template-columns:1fr 1.2fr;gap:24px;
+  }
+  @media (max-width:980px){.layout{grid-template-columns:1fr;}}
+
+  /* ===== 左侧：流水线可视化 ===== */
+  .panel{
+    background:rgba(255,255,255,.65);
+    border:1px solid rgba(255,255,255,.9);
+    border-radius:18px;
+    backdrop-filter:blur(14px);
+    box-shadow:0 10px 30px rgba(15,23,42,.05);
+    padding:24px;
+  }
+  .panel h3{margin:0 0 16px;font-size:15px;font-weight:600;color:#0f172a;display:flex;align-items:center;gap:8px;}
+  .panel h3 .ic{
+    width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;font-size:14px;
+  }
+
+  /* 节点栈 */
+  .nodes{display:flex;flex-direction:column;gap:0;}
+  .node{
+    position:relative;
+    background:#fff;border:1px solid #e2e8f0;border-radius:14px;
+    padding:14px 16px;display:flex;align-items:center;gap:14px;
+    transition:all .3s ease;
+  }
+  .node .num{
+    width:36px;height:36px;border-radius:10px;flex:0 0 36px;
+    background:linear-gradient(135deg,#f1f5f9,#e2e8f0);color:#64748b;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:700;font-size:14px;
+  }
+  .node .info{flex:1;min-width:0;}
+  .node .info .t{font-size:13.5px;font-weight:600;color:#0f172a;}
+  .node .info .d{font-size:11.5px;color:#64748b;margin-top:2px;}
+  .node .st{
+    font-size:11px;padding:3px 8px;border-radius:999px;
+    background:#f1f5f9;color:#94a3b8;white-space:nowrap;
+  }
+  /* 节点状态 */
+  .node.run{border-color:#7c3aed;box-shadow:0 0 0 3px rgba(124,58,237,.12);animation:pulse 1.6s ease-in-out infinite;}
+  .node.run .num{background:linear-gradient(135deg,#7c3aed,#5b21b6);color:#fff;}
+  .node.run .st{background:#ede9fe;color:#7c3aed;}
+  .node.done{border-color:#10b981;}
+  .node.done .num{background:linear-gradient(135deg,#10b981,#059669);color:#fff;}
+  .node.done .st{background:#d1fae5;color:#047857;}
+  .node.err{border-color:#ef4444;}
+  .node.err .num{background:linear-gradient(135deg,#ef4444,#dc2626);color:#fff;}
+  .node.err .st{background:#fee2e2;color:#b91c1c;}
+
+  @keyframes pulse{
+    0%,100%{box-shadow:0 0 0 3px rgba(124,58,237,.12);}
+    50%{box-shadow:0 0 0 6px rgba(124,58,237,.22);}
+  }
+
+  /* 节点之间的连线箭头 */
+  .arrow{
+    height:18px;display:flex;align-items:center;justify-content:center;
+    color:#cbd5e1;font-size:14px;
+  }
+  .arrow::before{content:"▼";}
+
+  /* ===== 右侧：操作 / 进度 / 文件 ===== */
+  .run-bar{
+    display:flex;gap:10px;margin-bottom:18px;align-items:center;
+  }
+  .run-btn{
+    flex:1;display:flex;align-items:center;justify-content:center;gap:8px;
+    background:linear-gradient(135deg,#7c3aed,#5b21b6);
+    color:#fff;border:none;border-radius:12px;padding:11px 18px;
+    font-size:14px;font-weight:600;cursor:pointer;
+    box-shadow:0 8px 20px rgba(124,58,237,.3);
+    transition:all .18s ease;
+  }
+  .run-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 10px 24px rgba(124,58,237,.4);}
+  .run-btn:disabled{opacity:.6;cursor:not-allowed;}
+  .run-btn .spinner{
+    width:14px;height:14px;border:2px solid rgba(255,255,255,.3);
+    border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite;
+    display:none;
+  }
+  .run-btn.loading .spinner{display:inline-block;}
+  .run-btn.loading .label::before{content:"运行中 · ";}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* 状态概览 */
+  .summary{
+    background:linear-gradient(135deg,#f5f3ff,#ede9fe);
+    border:1px solid #ddd6fe;border-radius:12px;
+    padding:14px 18px;font-size:13px;color:#5b21b6;
+    display:none;
+  }
+  .summary.show{display:block;}
+  .summary .row{display:flex;justify-content:space-between;margin:4px 0;}
+  .summary .row b{color:#0f172a;}
+
+  /* 日志面板 */
+  .log-panel{
+    background:#0f172a;border-radius:14px;padding:14px 16px;
+    margin:18px 0;max-height:280px;overflow-y:auto;
+    font-family:"JetBrains Mono","Cascadia Code",Consolas,"Courier New",monospace;
+    font-size:12px;line-height:1.7;color:#e2e8f0;
+  }
+  .log-panel .ts{color:#64748b;margin-right:8px;}
+  .log-panel .tag-n{display:inline-block;background:#7c3aed;color:#fff;padding:1px 6px;border-radius:4px;margin-right:6px;font-size:10.5px;font-weight:600;}
+  .log-panel .ok{color:#86efac;}
+  .log-panel .err{color:#fca5a5;}
+  .log-panel .info{color:#93c5fd;}
+
+  /* 文件列表 */
+  .files{display:flex;flex-direction:column;gap:8px;}
+  .file{
+    background:#fff;border:1px solid #e2e8f0;border-radius:10px;
+    padding:10px 12px;display:flex;align-items:center;gap:10px;
+    font-size:12.5px;
+    transition:all .15s ease;
+  }
+  .file:hover{border-color:#7c3aed;background:#faf7ff;}
+  .file .ftype{
+    width:28px;height:28px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    background:#f1f5f9;color:#64748b;font-size:11px;font-weight:700;flex:0 0 28px;
+  }
+  .file.java .ftype{background:#fde68a;color:#92400e;}
+  .file.md .ftype{background:#d1fae5;color:#065f46;}
+  .file.json .ftype{background:#ddd6fe;color:#5b21b6;}
+  .file .fname{flex:1;color:#0f172a;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:"JetBrains Mono","Cascadia Code",Consolas,monospace;font-size:11.5px;}
+  .file .fsize{color:#94a3b8;font-size:11px;}
+
+  .empty{
+    text-align:center;padding:30px 0;color:#94a3b8;font-size:13px;
+  }
+
+  footer{
+    text-align:center;padding:30px;font-size:12px;color:#94a3b8;
+    margin-top:30px;
+  }
+  footer a{color:#7c3aed;text-decoration:none;margin:0 8px;}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="/">
+    <div class="brand-logo">P</div>
+    <span>Project Agent</span>
+  </a>
+  <div class="crumbs">
+    <a href="/">导航</a>
+    <span class="sep">/</span>
+    <span class="now">代码助手 · 流水线</span>
+  </div>
+  <div class="nav-right">
+    <a class="ghost-btn" href="/chat">💬 对话</a>
+    <a class="ghost-btn" href="/docs" target="_blank">API 文档</a>
+  </div>
+</nav>
+
+<main class="wrap">
+  <div class="page-head">
+    <span class="tag">⚡  代码助手 · AI 编程提效</span>
+    <h1>5+1 节点流水线</h1>
+    <p>从业务需求文档出发，自动走完「需求拆解 → 代码生成 → 审查重构 → 单测生成 → 接口文档」五步，每步都有审查兜底，最后落盘到 <code>output/copilot_&lt;timestamp&gt;/</code> 目录。</p>
+  </div>
+
+  <div class="layout">
+    <!-- 左侧：节点栈 -->
+    <div class="panel">
+      <h3><div class="ic">⚙</div> 节点流水线</h3>
+      <div class="nodes" id="nodeList">
+        <div class="node" data-node="N1">
+          <div class="num">N1</div>
+          <div class="info">
+            <div class="t">需求拆解</div>
+            <div class="d">从需求文档抽取关键实体与边界条件</div>
+          </div>
+          <span class="st">待运行</span>
+        </div>
+        <div class="arrow"></div>
+        <div class="node" data-node="N2">
+          <div class="num">N2</div>
+          <div class="info">
+            <div class="t">代码生成</div>
+            <div class="d">生成 Service / Controller / Repository 三层</div>
+          </div>
+          <span class="st">待运行</span>
+        </div>
+        <div class="arrow"></div>
+        <div class="node" data-node="N3">
+          <div class="num">N3</div>
+          <div class="info">
+            <div class="t">审查重构</div>
+            <div class="d">静态错误检测 + 命名规范化</div>
+          </div>
+          <span class="st">待运行</span>
+        </div>
+        <div class="arrow"></div>
+        <div class="node" data-node="N4">
+          <div class="num">N4</div>
+          <div class="info">
+            <div class="t">单测生成</div>
+            <div class="d">JUnit 5 + Mockito 覆盖主分支</div>
+          </div>
+          <span class="st">待运行</span>
+        </div>
+        <div class="arrow"></div>
+        <div class="node" data-node="N5">
+          <div class="num">N5</div>
+          <div class="info">
+            <div class="t">接口文档</div>
+            <div class="d">自动产出 OpenAPI + Markdown</div>
+          </div>
+          <span class="st">待运行</span>
+        </div>
+        <div class="arrow"></div>
+        <div class="node" data-node="N6">
+          <div class="num">N6</div>
+          <div class="info">
+            <div class="t">审查兜底</div>
+            <div class="d">全链路质量门禁 · unfixed_errors 必须为 0</div>
+          </div>
+          <span class="st">待运行</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右侧：操作 / 日志 / 文件 -->
+    <div class="panel">
+      <h3><div class="ic">▶</div> 运行控制台</h3>
+
+      <div class="run-bar">
+        <button class="run-btn" id="runBtn">
+          <span class="spinner"></span>
+          <span class="label">运行流水线 · 预计 60-180s</span>
+        </button>
+      </div>
+
+      <div class="summary" id="summary">
+        <div class="row"><span>⏱  耗时</span><b id="sumTime">—</b></div>
+        <div class="row"><span>📁 产出目录</span><b id="sumDir">—</b></div>
+        <div class="row"><span>📄 文件数</span><b id="sumFiles">—</b></div>
+        <div class="row"><span>✅ 审查通过</span><b id="sumReview">—</b></div>
+      </div>
+
+      <div class="log-panel" id="log"></div>
+
+      <div id="filesBox">
+        <h3 style="font-size:13px;color:#475569;font-weight:600;margin:18px 0 10px;">📂 产出文件</h3>
+        <div class="empty" id="emptyHint">点击「运行流水线」开始</div>
+        <div class="files" id="fileList" style="display:none;"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <a href="/">返回导航</a>
+  <a href="/chat">对话入口</a>
+  <a href="/docs" target="_blank">Swagger</a>
+</footer>
+
+<script>
+const NODE_LABELS = {
+  N1: "需求拆解",
+  N2: "代码生成",
+  N3: "审查重构",
+  N4: "单测生成",
+  N5: "接口文档",
+  N6: "审查兜底"
+};
+// 流水线预计顺序（基于上一次运行的真实时序，确保 UI 状态准）
+const NODE_ORDER = ["N1","N2","N3","N4","N5","N6"];
+const STEP_DURATION_MS = 18000; // 每节点预估 18s，5+1 节点 ≈ 108s
+
+const logPanel = document.getElementById("log");
+const runBtn = document.getElementById("runBtn");
+const fileList = document.getElementById("fileList");
+const emptyHint = document.getElementById("emptyHint");
+const summary = document.getElementById("summary");
+
+function log(msg, kind="info"){
+  const ts = new Date().toLocaleTimeString("zh-CN",{hour12:false});
+  const tag = kind === "ok" ? '<span class="tag-n">OK</span>'
+            : kind === "err" ? '<span class="tag-n" style="background:#ef4444;">ERR</span>'
+            : '<span class="tag-n">LOG</span>';
+  const cls = kind === "ok" ? "ok" : kind === "err" ? "err" : "info";
+  logPanel.insertAdjacentHTML("beforeend",
+    `<div><span class="ts">${ts}</span>${tag}<span class="${cls}">${msg}</span></div>`);
+  logPanel.scrollTop = logPanel.scrollHeight;
+}
+
+function setNodeState(name, state){
+  const el = document.querySelector(`.node[data-node="${name}"]`);
+  if (!el) return;
+  el.classList.remove("run","done","err");
+  const stEl = el.querySelector(".st");
+  if (state === "run"){
+    el.classList.add("run");
+    stEl.textContent = "运行中…";
+  } else if (state === "done"){
+    el.classList.add("done");
+    stEl.textContent = "✓ 完成";
+  } else if (state === "err"){
+    el.classList.add("err");
+    stEl.textContent = "✗ 失败";
+  } else {
+    stEl.textContent = "待运行";
+  }
+}
+
+function resetAll(){
+  NODE_ORDER.forEach(n => setNodeState(n, "idle"));
+  logPanel.innerHTML = "";
+  fileList.innerHTML = "";
+  fileList.style.display = "none";
+  emptyHint.style.display = "block";
+  emptyHint.textContent = "点击「运行流水线」开始";
+  summary.classList.remove("show");
+}
+
+async function runPipeline(){
+  resetAll();
+  runBtn.classList.add("loading");
+  runBtn.disabled = true;
+  const start = Date.now();
+  log("流水线启动 · 提交 POST /api/v1/copilot/run", "info");
+
+  // 模拟 UI 进度（每 ~18s 推一个节点状态）。真接口是同步阻塞 60-180s，
+  // 这里并行启动 fake ticker 与真实 fetch，真实返回时强制全部 done。
+  let fakeIdx = 0;
+  const fakeTick = setInterval(()=>{
+    if (fakeIdx < NODE_ORDER.length){
+      setNodeState(NODE_ORDER[fakeIdx], "run");
+      log(`${NODE_ORDER[fakeIdx]} · ${NODE_LABELS[NODE_ORDER[fakeIdx]]} 开始执行`, "info");
+      // 把上一个标 done
+      if (fakeIdx > 0){
+        setNodeState(NODE_ORDER[fakeIdx-1], "done");
+        log(`${NODE_ORDER[fakeIdx-1]} · 已完成`, "ok");
+      }
+      fakeIdx++;
+    }
+  }, STEP_DURATION_MS);
+
+  try {
+    const r = await fetch("/api/v1/copilot/run", {
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({})
+    });
+    const j = await r.json();
+    if (!r.ok || j.errors){
+      throw new Error(j.errors?.[0] || ("HTTP " + r.status));
+    }
+
+    clearInterval(fakeTick);
+    // 全部置完成
+    NODE_ORDER.forEach(n => setNodeState(n, "done"));
+    log("全流水线完成 · 审查门禁通过", "ok");
+
+    // 总结
+    const elapsed = ((Date.now() - start)/1000).toFixed(1);
+    const files = (j.generated_files || j.file_list || []);
+    document.getElementById("sumTime").textContent  = elapsed + " s";
+    document.getElementById("sumDir").textContent   = j.output_dir || "—";
+    document.getElementById("sumFiles").textContent = String(files.length);
+    document.getElementById("sumReview").textContent = (j.review && j.review.unfixed_errors === 0) ? "✓ unfixed=0" : (j.review ? `✗ unfixed=${j.review.unfixed_errors}` : "—");
+    summary.classList.add("show");
+
+    // 文件列表
+    if (files.length){
+      emptyHint.style.display = "none";
+      fileList.style.display = "flex";
+      fileList.innerHTML = files.map(f => {
+        const ext = (f.path || f.name || "").split(".").pop().toLowerCase();
+        const cls = ["java","md","json","sql","xml"].includes(ext) ? ext : "";
+        return `<a class="file ${cls}" href="file:///E:/ai-pro/project_agent/${(f.path || f.name).replace(/^\//,'')}" target="_blank">
+          <div class="ftype">${(ext || "?").toUpperCase().slice(0,4)}</div>
+          <div class="fname">${f.name || f.path || ""}</div>
+          <div class="fsize">${f.lines ? f.lines + " lines" : ""}</div>
+        </a>`;
+      }).join("");
+      log(`已生成 ${files.length} 个文件到 ${j.output_dir || "output/"}`, "ok");
+    }
+  } catch(e){
+    clearInterval(fakeTick);
+    log("运行失败 · " + (e.message || e), "err");
+    // 当前正在运行的节点标红
+    if (fakeIdx-1 >= 0) setNodeState(NODE_ORDER[fakeIdx-1], "err");
+  } finally {
+    runBtn.classList.remove("loading");
+    runBtn.disabled = false;
+  }
+}
+
+runBtn.addEventListener("click", runPipeline);
+
+// 兼容：使用 file:// 直接打开本页面（不在服务里）时按钮 fallback
+</script>
+</body>
+</html>

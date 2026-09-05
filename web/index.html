@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Project Agent · 双 Agent 导航</title>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:#0f172a;
+    background:
+      radial-gradient(1100px 700px at 8% -10%, #dbeafe 0%, transparent 55%),
+      radial-gradient(900px 600px at 100% 10%, #e0e7ff 0%, transparent 50%),
+      radial-gradient(700px 500px at 50% 110%, #fce7f3 0%, transparent 55%),
+      linear-gradient(180deg,#f8fbff 0%,#f1f5ff 100%);
+    min-height:100vh;
+    overflow-x:hidden;
+  }
+  /* 顶部 */
+  .nav{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:20px 44px;
+  }
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:#0f172a;}
+  .brand-logo{
+    width:34px;height:34px;border-radius:9px;
+    background:linear-gradient(135deg,#3b82f6,#2563eb);
+    display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:800;font-size:16px;
+    box-shadow:0 6px 20px rgba(59,130,246,.35);
+  }
+  .nav-right{display:flex;align-items:center;gap:8px;}
+  .lang{
+    display:flex;background:rgba(255,255,255,.65);border:1px solid #e2e8f0;
+    border-radius:999px;padding:3px;font-size:12.5px;color:#475569;
+    backdrop-filter:blur(10px);
+  }
+  .lang a{padding:5px 12px;border-radius:999px;text-decoration:none;color:#475569;}
+  .lang a.on{background:#0f172a;color:#fff;}
+  .ghost-btn{
+    border:1px solid #e2e8f0;background:rgba(255,255,255,.65);
+    backdrop-filter:blur(10px);
+    border-radius:999px;padding:7px 16px;font-size:13px;color:#0f172a;
+    cursor:pointer;text-decoration:none;
+    transition:all .18s ease;
+  }
+  .ghost-btn:hover{background:#fff;border-color:#cbd5e1;}
+  /* 主区 */
+  .hero{
+    max-width:1200px;margin:0 auto;
+    padding:54px 44px 30px;
+    display:grid;grid-template-columns:1.25fr 1fr;gap:60px;align-items:center;
+  }
+  @media (max-width:980px){.hero{grid-template-columns:1fr;gap:30px;}}
+  .hero h2{
+    font-size:14px;color:#3b82f6;font-weight:600;margin:0 0 18px;
+    display:flex;align-items:center;gap:8px;
+  }
+  .hero h2::before{content:"";width:6px;height:6px;border-radius:50%;background:#3b82f6;box-shadow:0 0 0 4px rgba(59,130,246,.15);}
+  .hero h1{
+    font-size:54px;font-weight:700;margin:0 0 30px;letter-spacing:-1px;
+    background:linear-gradient(135deg,#0f172a 30%,#3b82f6);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .card-row{display:flex;gap:18px;flex-wrap:wrap;}
+  .glass{
+    background:rgba(255,255,255,.55);
+    border:1px solid rgba(255,255,255,.9);
+    border-radius:18px;padding:22px 24px;
+    backdrop-filter:blur(14px);
+    box-shadow:0 12px 40px rgba(15,23,42,.06);
+    cursor:pointer;text-decoration:none;color:inherit;
+    transition:transform .22s ease, box-shadow .22s ease;
+    min-width:240px;flex:1 1 240px;
+  }
+  .glass:hover{transform:translateY(-3px);box-shadow:0 18px 50px rgba(15,23,42,.12);}
+  .glass .ic{
+    width:36px;height:36px;border-radius:10px;
+    display:flex;align-items:center;justify-content:center;font-size:18px;
+    margin-bottom:14px;
+  }
+  .glass.chat .ic{background:linear-gradient(135deg,#dbeafe,#bfdbfe);color:#2563eb;}
+  .glass.copilot .ic{background:linear-gradient(135deg,#ede9fe,#ddd6fe);color:#7c3aed;}
+  .glass h3{margin:0 0 6px;font-size:16px;font-weight:600;color:#0f172a;}
+  .glass p{margin:0;font-size:12.5px;color:#64748b;line-height:1.6;}
+  /* 右侧装饰大卡 */
+  .hero-card{
+    position:relative;
+    aspect-ratio:5/4;
+    border-radius:24px;overflow:hidden;
+    background:
+      radial-gradient(ellipse at 80% 20%, rgba(255,255,255,.18), transparent 55%),
+      linear-gradient(150deg,#1e40af 0%,#1e3a8a 55%,#0c1f4d 100%);
+    box-shadow:0 30px 80px rgba(30,58,138,.35);
+    color:#fff;
+    padding:32px;
+    display:flex;flex-direction:column;justify-content:flex-end;
+    cursor:pointer;
+    transition:transform .25s ease;
+  }
+  .hero-card:hover{transform:translateY(-4px);}
+  .hero-card::before{
+    content:"";position:absolute;inset:0;
+    background:
+      radial-gradient(circle at 20% 30%, rgba(255,255,255,.1), transparent 30%),
+      radial-gradient(circle at 80% 80%, rgba(99,102,241,.25), transparent 40%);
+    pointer-events:none;
+  }
+  .hero-card .badge{
+    display:inline-block;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);
+    padding:5px 12px;border-radius:999px;font-size:12px;
+    margin-bottom:18px;align-self:flex-start;
+    backdrop-filter:blur(8px);
+  }
+  .hero-card h3{margin:0 0 10px;font-size:28px;font-weight:700;line-height:1.3;}
+  .hero-card p{margin:0 0 22px;font-size:14px;color:rgba(255,255,255,.75);line-height:1.6;max-width:320px;}
+  .hero-card .cta{
+    display:inline-flex;align-items:center;gap:8px;
+    color:#fff;font-size:13px;font-weight:500;
+    align-self:flex-start;
+  }
+  /* 下方 metrics */
+  .stats{
+    max-width:1200px;margin:30px auto 60px;padding:0 44px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:18px;
+  }
+  @media (max-width:780px){.stats{grid-template-columns:repeat(2,1fr);}}
+  .stat{
+    background:rgba(255,255,255,.5);border:1px solid #e2e8f0;border-radius:14px;
+    padding:18px 20px;backdrop-filter:blur(10px);
+  }
+  .stat .v{font-size:26px;font-weight:700;color:#0f172a;line-height:1.1;}
+  .stat .l{font-size:12px;color:#64748b;margin-top:6px;}
+  /* 底部 */
+  footer{
+    text-align:center;padding:30px;font-size:12px;color:#94a3b8;
+    border-top:1px solid rgba(226,232,240,.6);
+    max-width:1200px;margin:0 auto;
+  }
+  footer a{color:#3b82f6;text-decoration:none;margin:0 10px;}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="brand">
+    <div class="brand-logo">P</div>
+    <span>Project Agent</span>
+  </div>
+  <div class="nav-right">
+    <a class="ghost-btn" href="/docs" target="_blank">API 文档</a>
+    <a class="ghost-btn" href="/redoc" target="_blank">ReDoc</a>
+    <div class="lang">
+      <a class="on" href="#">中文</a>
+      <a href="#">EN</a>
+    </div>
+  </div>
+</nav>
+
+<section class="hero">
+  <div>
+    <h2>双 Agent · 双引擎 · 单服务</h2>
+    <h1>探索未至之境</h1>
+    <div class="card-row">
+      <a class="glass chat" href="/chat">
+        <div class="ic">💬</div>
+        <h3>开始对话</h3>
+        <p>RAG 知识库 · 7+7 节点 · 3 个 Function Calling 工具 · Milvus 向量库 · SSE 流式</p>
+      </a>
+      <a class="glass copilot" href="/pipeline">
+        <div class="ic">⚡</div>
+        <h3>代码助手</h3>
+        <p>AI 编程提效 · 5 节点流水线 · 需求 → 代码 → 审查 → 单测 → 文档</p>
+      </a>
+    </div>
+  </div>
+
+  <a class="hero-card" href="/chat">
+    <div class="badge">v1.0 · 在线</div>
+    <h3>把两个 Agent<br/>装进同一个浏览器</h3>
+    <p>RAG 知识库问答 + 代码助手 流水线 · 同一服务、同一向量库、同一个入口。</p>
+    <span class="cta">立即体验 →</span>
+  </a>
+</section>
+
+<section class="stats">
+  <div class="stat"><div class="v" id="vChunks">—</div><div class="l">向量库 chunk 数</div></div>
+  <div class="stat"><div class="v" id="vItems">—</div><div class="l">已导入知识手册</div></div>
+  <div class="stat"><div class="v">7+7</div><div class="l">RAG 导入/检索节点</div></div>
+  <div class="stat"><div class="v">5+1</div><div class="l">代码助手流水线节点</div></div>
+</section>
+
+<footer>
+  project_agent · FastAPI + LangGraph + Milvus
+  <a href="/docs">Swagger</a>
+  <a href="https://github.com/" target="_blank">GitHub</a>
+</footer>
+
+<script>
+fetch("http://127.0.0.1:8080/api/v1/health",{cache:"no-store"})
+  .then(r=>r.json()).then(j=>{
+    if(j.milvus){
+      document.getElementById("vChunks").textContent = j.milvus.kb_chunks ?? "—";
+      document.getElementById("vItems").textContent  = j.milvus.kb_item_names ?? "—";
+    }
+  }).catch(()=>{});
+</script>
+</body>
+</html>
