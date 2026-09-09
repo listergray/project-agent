@@ -95,13 +95,17 @@ if not _DIST_DIR.is_dir():
 # ============================================================
 @app.get("/api/v1/health", tags=["元信息"])
 def health() -> Dict[str, Any]:
+    """liveness=进程存活；readiness=Milvus 可统计（RAG 主依赖就绪）。"""
     try:
         ms = milvus_stats()
     except Exception as e:  # noqa: BLE001
         ms = {"error": str(e)}
+    milvus_ok = isinstance(ms, dict) and "error" not in ms and (
+        ms.get("kb_chunks") is not None or ms.get("kb_item_names") is not None
+    )
     return {
         "liveness": True,
-        "readiness": True,
+        "readiness": bool(milvus_ok),
         "milvus": ms,
         "trace_id": get_trace_id(),
     }
@@ -138,6 +142,8 @@ class ChatResp(BaseModel):
     tool_calls: List[Dict[str, Any]]
     intent: str
     elapsed_ms: int
+    need_rag: Optional[bool] = None
+    self_rag_route_reason: Optional[str] = None
     self_rag_retries: int = 0
     self_rag_grade: Optional[Dict[str, Any]] = None
     multi_queries: List[str] = Field(default_factory=list)
@@ -157,6 +163,8 @@ def _chat_resp_from_result(res: Dict[str, Any], elapsed_ms: int) -> ChatResp:
         tool_calls=list(res.get("tool_calls") or []),
         intent=str(res.get("intent", "MIXED")),
         elapsed_ms=elapsed_ms,
+        need_rag=res.get("need_rag") if "need_rag" in res else None,
+        self_rag_route_reason=res.get("self_rag_route_reason"),
         self_rag_retries=int(res.get("self_rag_retries") or 0),
         self_rag_grade=res.get("self_rag_grade"),
         multi_queries=list(res.get("multi_queries") or []),
@@ -221,6 +229,8 @@ async def _chat_stream(req: ChatReq):
         "tool_calls": list(res.get("tool_calls") or []),
         "sources": list(res.get("sources") or []),
         "elapsed_ms": elapsed,
+        "need_rag": res.get("need_rag"),
+        "self_rag_route_reason": res.get("self_rag_route_reason"),
         "self_rag_retries": int(res.get("self_rag_retries") or 0),
         "self_rag_grade": res.get("self_rag_grade"),
         "multi_queries": list(res.get("multi_queries") or []),
@@ -286,6 +296,8 @@ async def _chat_resume_stream(req: ChatResumeReq):
         "tool_calls": list(res.get("tool_calls") or []),
         "sources": list(res.get("sources") or []),
         "elapsed_ms": elapsed,
+        "need_rag": res.get("need_rag"),
+        "self_rag_route_reason": res.get("self_rag_route_reason"),
         "self_rag_retries": int(res.get("self_rag_retries") or 0),
         "self_rag_grade": res.get("self_rag_grade"),
         "multi_queries": list(res.get("multi_queries") or []),

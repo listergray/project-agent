@@ -25,12 +25,21 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 function metaFromData(data: Record<string, unknown>): Omit<ChatResp, 'answer'> {
+  const needRagRaw = data.need_rag
+  let need_rag: boolean | null = null
+  if (typeof needRagRaw === 'boolean') need_rag = needRagRaw
+  else if (needRagRaw === 'true' || needRagRaw === 1) need_rag = true
+  else if (needRagRaw === 'false' || needRagRaw === 0) need_rag = false
+
   return {
     session_id: String(data.session_id || ''),
     intent: String(data.intent || 'MIXED'),
     tool_calls: (data.tool_calls as Array<Record<string, unknown>>) || [],
     sources: (data.sources as string[]) || [],
     elapsed_ms: Number(data.elapsed_ms || 0),
+    need_rag,
+    self_rag_route_reason:
+      data.self_rag_route_reason == null ? null : String(data.self_rag_route_reason),
     self_rag_retries: Number(data.self_rag_retries || 0),
     self_rag_grade: (data.self_rag_grade as Record<string, unknown>) || null,
     multi_queries: (data.multi_queries as string[]) || [],

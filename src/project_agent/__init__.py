@@ -15,7 +15,7 @@ project-agent 根包 —— 生产级双 Agent 预研（Python AI 编排服务�
   ✅ LangGraph State/Node/Edge/条件分支 · Prompt · 基础 RAG+查询改写+RRF 融合
   ✅ Function Calling 思考-行动循环 · Milvus+Embedding+余弦+IVF+元数据过滤
   ✅ LLM 兼容封装 · 重试/超时 · DeepSeek 等 OpenAI 兼容模型
-  ✅ Self-RAG（N6b）· 多查询 Fusion（N1b）· 忠实度（N7b）· 图级 HITL + Sqlite Checkpoint
+  ✅ Self-RAG（N1a 路由 need_rag · N6b Grade）· 多查询 Fusion（N1b）· 忠实度（N7b）· 图级 HITL + Sqlite Checkpoint
   ✅ 会话窗口裁剪 · LangSmith · 节点内 LCEL · React 门户（frontend/；Vue 对照在 frontend-vue）
   ✅ 混合架构：项目库基础业务 → Java/芋道（java-biz/）；AI 编排 → 本仓 Python（见 docs/ARCHITECTURE.md）
   ⚠️ LCEL 管道未替代整图编排（图仍为 LangGraph）；Chroma 未作为主库

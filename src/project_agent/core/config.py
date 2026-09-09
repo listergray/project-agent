@@ -46,14 +46,14 @@ class Settings(BaseSettings):
     milvus_port: int = 19530
     milvus_alias: str = "default"
 
-    # ---------- MinIO ----------
+    # ---------- MinIO（可选：主演示可不启）----------
     minio_endpoint: str = "localhost:9000"
     minio_access_key: str = "minioadmin"
     minio_secret_key: str = "minioadmin"
     minio_secure: bool = False
     minio_bucket_kb: str = "kb-files"
 
-    # ---------- MySQL ----------
+    # ---------- MySQL（规划/可选：主路径未强依赖）----------
     mysql_host: str = "localhost"
     mysql_port: int = 3306
     mysql_user: str = "root"
@@ -75,7 +75,7 @@ class Settings(BaseSettings):
             f"@{self.mysql_host}:{self.mysql_port}/{self.mysql_db_dw}?charset=utf8mb4"
         )
 
-    # ---------- Redis ----------
+    # ---------- Redis（规划/可选：主路径未强依赖）----------
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_password: Optional[str] = None
@@ -84,6 +84,10 @@ class Settings(BaseSettings):
     # ---------- Self-RAG ----------
     self_rag_max_retries: int = Field(
         1, description="检索不足时最多改写再检索次数（0=关闭重试）"
+    )
+    enable_self_rag_route: bool = Field(
+        True,
+        description="入口 Self-RAG 路由：判断 need_rag；关闭则始终走检索链",
     )
 
     # ---------- RAG 工程化开关 ----------

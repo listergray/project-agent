@@ -1,10 +1,11 @@
 """
-RAG 知识库节点：导入 + 检索（含多查询 Fusion / Self-RAG / HITL / 忠实度）
+RAG 知识库节点：导入 + 检索（含 Self-RAG 路由 / Fusion / Grade / HITL / 忠实度）
 
 【技能点】
   ✅ Prompt + 基础 RAG + 查询改写
+  ✅ Self-RAG 路由（N1a need_rag）
   ✅ 多查询 RAG-Fusion（N1b LCEL + N3 多路召回 + N5 RRF）
-  ✅ Self-RAG grade / 回跳
+  ✅ Self-RAG grade / 回跳（N6b）
   ✅ 图级 HITL（N6c）+ 答案忠实度 LCEL（N7b）
   ✅ Function Calling 思考-行动（N7）
 """
@@ -33,7 +34,7 @@ from project_agent.clients import (
     rerank,
 )
 from project_agent.core import new_trace_id
-from project_agent.rag_kb.self_rag import q_n6b_self_rag_grade
+from project_agent.rag_kb.self_rag import q_n1a_self_rag_route, q_n6b_self_rag_grade
 from project_agent.rag_kb.fusion import q_n1b_multi_query
 from project_agent.rag_kb.faithfulness import q_n6c_hitl_retrieval, q_n7b_faithfulness
 from project_agent.tools.rag_tools import RAG_TOOLS, RAG_TOOLS_BY_NAME
@@ -578,6 +579,7 @@ IMPORT_NODES = [
 
 SEARCH_NODES = [
     ("q_n1_rewrite_intent", q_n1_rewrite_intent),
+    ("q_n1a_self_rag_route", q_n1a_self_rag_route),
     ("q_n1b_multi_query", q_n1b_multi_query),
     ("q_n2_locate_item", q_n2_locate_item),
     ("q_n3_vector_recall", q_n3_vector_recall),
@@ -595,8 +597,8 @@ __all__ = [
     "SEARCH_NODES",
     "i_n1_parse_file", "i_n2_read_or_ocr", "i_n3_structure",
     "i_n4_semantic_split", "i_n5_extract_item", "i_n6_encode_vectors", "i_n7_write_milvus",
-    "q_n1_rewrite_intent", "q_n1b_multi_query", "q_n2_locate_item", "q_n3_vector_recall",
-    "q_n4_tool_fuzzy_recall", "q_n5_rrf_fusion", "q_n6_rerank",
+    "q_n1_rewrite_intent", "q_n1a_self_rag_route", "q_n1b_multi_query", "q_n2_locate_item",
+    "q_n3_vector_recall", "q_n4_tool_fuzzy_recall", "q_n5_rrf_fusion", "q_n6_rerank",
     "q_n6b_self_rag_grade", "q_n6c_hitl_retrieval",
     "q_n7_answer_with_tools", "q_n7b_faithfulness",
 ]

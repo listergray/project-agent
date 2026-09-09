@@ -69,6 +69,8 @@ export interface ChatResp {
   tool_calls: Array<Record<string, unknown>>
   intent: string
   elapsed_ms: number
+  need_rag?: boolean | null
+  self_rag_route_reason?: string | null
   self_rag_retries?: number
   self_rag_grade?: Record<string, unknown> | null
   multi_queries?: string[]

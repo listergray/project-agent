@@ -2,13 +2,13 @@
 RAG 知识库：LangGraph 图 + Checkpoint + 门面（run_import / run_search / resume_search）
 
 【技能点 · LangGraph】
-  ✅ StateGraph + 条件边（Self-RAG 回跳 / HITL / 忠实度）
+  ✅ StateGraph + 条件边（Self-RAG 路由 / Grade 回跳 / HITL / 忠实度）
   ✅ Sqlite Checkpoint（thread_id=session_id）
   ✅ 图级 interrupt HITL + Command(resume=...)
   ✅ 会话 JSON 记忆窗口裁剪
 
 【技能点 · LCEL / Fusion】
-  ✅ 节点内 LCEL（多查询、忠实度等）；图本身非 LCEL 管道
+  ✅ 节点内 LCEL（多查询、忠实度、Self-RAG 路由等）；图本身非 LCEL 管道
   ✅ 多查询 RAG-Fusion + RRF
 """
 from __future__ import annotations
@@ -70,17 +70,42 @@ def _build_import_graph() -> CompiledStateGraph:
 
 def _build_search_graph() -> CompiledStateGraph:
     """
-    N1 → N1b → N2 → N3 → N4 → N5 → N6 → N6b
-      ├─ retry → N2
-      ├─ exhausted → N6c HITL → (rewrite→N2 | approve→N7)
-      └─ ok → N7 → N7b → END
+    N1 → N1a(Self-RAG route)
+      ├─ need_rag=false → N7 → N7b → END
+      └─ need_rag=true  → N1b → N2 → N3 → N4 → N5 → N6 → N6b
+            ├─ retry → N2
+            ├─ exhausted → N6c HITL → (rewrite→N2 | approve→N7)
+            └─ ok → N7 → N7b → END
     """
     builder = StateGraph(SearchState)
     for name, fn in SEARCH_NODES:
         builder.add_node(name, fn)
 
-    linear = [
+    builder.add_edge(START, "q_n1_rewrite_intent")
+    builder.add_conditional_edges(
         "q_n1_rewrite_intent",
+        lambda s: END if s.get("errors") else "q_n1a_self_rag_route",
+        {"q_n1a_self_rag_route": "q_n1a_self_rag_route", END: END},
+    )
+
+    def _route_need_rag(s: Dict[str, Any]) -> Any:
+        if s.get("errors"):
+            return END
+        if s.get("need_rag") is False:
+            return "q_n7_answer_with_tools"
+        return "q_n1b_multi_query"
+
+    builder.add_conditional_edges(
+        "q_n1a_self_rag_route",
+        _route_need_rag,
+        {
+            "q_n1b_multi_query": "q_n1b_multi_query",
+            "q_n7_answer_with_tools": "q_n7_answer_with_tools",
+            END: END,
+        },
+    )
+
+    linear = [
         "q_n1b_multi_query",
         "q_n2_locate_item",
         "q_n3_vector_recall",
@@ -88,7 +113,6 @@ def _build_search_graph() -> CompiledStateGraph:
         "q_n5_rrf_fusion",
         "q_n6_rerank",
     ]
-    builder.add_edge(START, linear[0])
     for i, n in enumerate(linear):
         next_n = linear[i + 1] if i + 1 < len(linear) else "q_n6b_self_rag_grade"
         builder.add_conditional_edges(
@@ -164,6 +188,7 @@ def _search_config(sid: str, extra_meta: Optional[Dict[str, Any]] = None) -> Dic
         "enable_multi_query": settings.enable_multi_query,
         "enable_faithfulness": settings.enable_faithfulness,
         "enable_graph_hitl": settings.enable_graph_hitl,
+        "enable_self_rag_route": settings.enable_self_rag_route,
     }
     if extra_meta:
         meta.update(extra_meta)
@@ -197,6 +222,7 @@ def _finalize_search_result(result: Dict[str, Any], sid: str, user_query: str) -
     grade = result.get("self_rag_grade") or {}
     logger.info(
         f"[Search] done interrupted={result.get('interrupted')} "
+        f"need_rag={result.get('need_rag')} "
         f"answer_len={len(result.get('answer') or '')} "
         f"self_rag_retries={result.get('self_rag_retries', 0)} "
         f"faithfulness={result.get('faithfulness_score')} "
@@ -238,6 +264,7 @@ def run_search(user_query: str, *, session_id: str | None = None) -> Dict[str, A
         "self_rag_retries": 0,
         "self_rag_need_retry": False,
         "self_rag_exhausted": False,
+        "need_rag": True,
         "interrupted": False,
     }
     config = _search_config(sid)

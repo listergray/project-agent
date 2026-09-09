@@ -85,6 +85,18 @@ def q_n7b_faithfulness(state: Dict[str, Any]) -> Dict[str, Any]:
             "faithfulness_score": 1.0,
             "need_human_review": False,
         }
+    # 跳过 RAG 时无文档上下文，仅靠工具结果；仍校验，但空工具+空上下文则放行避免误打断
+    if state.get("need_rag") is False and not (state.get("reranked_candidates") or []) and not (state.get("tool_calls") or []):
+        return {
+            "faithfulness": {
+                "grounded": True,
+                "score": 1.0,
+                "reason": "need_rag=false 且无工具结果，跳过文档忠实度",
+                "unsupported_claims": [],
+            },
+            "faithfulness_score": 1.0,
+            "need_human_review": False,
+        }
 
     ctx = state.get("reranked_candidates") or []
     tools = state.get("tool_calls") or []

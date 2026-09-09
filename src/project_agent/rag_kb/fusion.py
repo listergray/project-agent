@@ -3,12 +3,13 @@
 
 【技能点 · RAG-Fusion】
   ✅ 一问多改写（LCEL JSON）
+  ✅ 批量 Embedding + ThreadPool 并行 Milvus 召回
   ✅ 多路向量召回后在 N5 与模糊结果一起 RRF
 """
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Dict, List, Tuple
 
 from loguru import logger
 from pydantic import BaseModel, Field
@@ -66,8 +67,28 @@ def q_n1b_multi_query(state: Dict[str, Any]) -> Dict[str, Any]:
     return {"multi_queries": uniq}
 
 
+def _search_one(
+    qi: int,
+    q: str,
+    q_vec: List[float],
+    item_pk: Any,
+    item_name: Any,
+) -> Tuple[int, str, List[dict]]:
+    try:
+        hits = hybrid_search_chunks(
+            q_vec,
+            top_k=30,
+            item_pk_filter=item_pk,
+            item_name_filter=item_name,
+        )
+        return qi, q, hits or []
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[Search N3] query#{qi} 召回失败: {e}")
+        return qi, q, []
+
+
 def q_n3_vector_recall(state: Dict[str, Any]) -> Dict[str, Any]:
-    """N3：对 multi_queries 并行向量召回，打上来源标签后合并（RRF 在 N5）。"""
+    """N3：批量 encode + 并行 Milvus 召回，打上来源标签后合并（RRF 在 N5）。"""
     queries = state.get("multi_queries") or []
     if not queries:
         q = state.get("rewritten_query") or state.get("user_query") or ""
@@ -77,36 +98,61 @@ def q_n3_vector_recall(state: Dict[str, Any]) -> Dict[str, Any]:
     item_name = state.get("confirmed_item_name")
     all_hits: List[dict] = []
     seen_pk: set = set()
-    for qi, q in enumerate(queries):
-        try:
-            q_vec = encode([q])[0]
-            hits = hybrid_search_chunks(
-                q_vec,
-                top_k=30,
-                item_pk_filter=item_pk,
-                item_name_filter=item_name,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"[Search N3] query#{qi} 召回失败: {e}")
-            hits = []
+
+    if not queries:
+        return {
+            "recalled_chunks": [],
+            "retrieval_paths": {"vector_queries": [], "vector_hits": 0, "parallel": True},
+        }
+
+    try:
+        vectors = encode(list(queries))
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"[Search N3] 批量 encode 失败，逐条兜底: {e}")
+        vectors = []
+        for q in queries:
+            try:
+                vectors.append(encode([q])[0])
+            except Exception as e2:  # noqa: BLE001
+                logger.warning(f"[Search N3] encode 单条失败: {e2}")
+                vectors.append(None)  # type: ignore[arg-type]
+
+    workers = min(4, max(1, len(queries)))
+    results: List[Tuple[int, str, List[dict]]] = []
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futs = []
+        for qi, q in enumerate(queries):
+            vec = vectors[qi] if qi < len(vectors) else None
+            if vec is None:
+                results.append((qi, q, []))
+                continue
+            futs.append(pool.submit(_search_one, qi, q, vec, item_pk, item_name))
+        for fut in as_completed(futs):
+            results.append(fut.result())
+
+    # 按 query 下标排序，保证「原改写优先」去重语义稳定
+    results.sort(key=lambda x: x[0])
+    for qi, q, hits in results:
         for h in hits:
             pk = h.get("pk")
             h = dict(h)
             h["fusion_query"] = q
             h["fusion_query_idx"] = qi
-            # 同 pk 保留第一次（最高查询优先级：原改写通常在前）
             if pk in seen_pk:
                 continue
             seen_pk.add(pk)
             all_hits.append(h)
 
     logger.info(
-        f"[Search N3] 多查询召回 queries={len(queries)} unique_chunks={len(all_hits)}"
+        f"[Search N3] 并行召回 workers={workers} queries={len(queries)} "
+        f"unique_chunks={len(all_hits)}"
     )
     return {
         "recalled_chunks": all_hits,
         "retrieval_paths": {
             "vector_queries": queries,
             "vector_hits": len(all_hits),
+            "parallel": True,
+            "workers": workers,
         },
     }

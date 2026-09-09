@@ -49,11 +49,14 @@ export function ChatPage() {
         .health()
         .then((j) => {
           const m = j.milvus || {}
-          if (m.kb_chunks != null && m.kb_item_names != null) {
+          if (j.readiness && m.kb_chunks != null && m.kb_item_names != null) {
             setHealth(`Milvus 已连接 · ${m.kb_item_names} 手册 / ${m.kb_chunks} chunks`)
             setHealthOk(true)
+          } else if (m.error) {
+            setHealth(`Milvus 未就绪：${String(m.error).slice(0, 80)}`)
+            setHealthOk(false)
           } else {
-            setHealth('Milvus 未就绪')
+            setHealth('服务存活，但向量库未就绪')
             setHealthOk(false)
           }
         })
@@ -344,6 +347,8 @@ export function ChatPage() {
                     <div className="meta">
                       <span>⏱ {m.data.elapsed_ms ?? '?'} ms</span>
                       <span>🆔 {String(m.data.session_id || '').slice(0, 8) || '—'}</span>
+                      {m.data.need_rag === false && <span>⏭ 跳过 RAG</span>}
+                      {m.data.need_rag === true && <span>📚 走 RAG</span>}
                       {(m.data.multi_queries?.length || 0) > 0 && (
                         <span>🔀 Fusion ×{m.data.multi_queries!.length}</span>
                       )}

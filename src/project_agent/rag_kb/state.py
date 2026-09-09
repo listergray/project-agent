@@ -4,7 +4,7 @@
 【技能点 · State 状态管理】
   ✅ TypedDict State：ImportState / SearchState
   ✅ messages + add_messages；session_id 对接 Checkpoint thread_id
-  ✅ Self-RAG / multi_queries / faithfulness / HITL 字段
+  ✅ Self-RAG 路由 need_rag / Grade / multi_queries / faithfulness / HITL
 """
 from __future__ import annotations
 
@@ -39,6 +39,10 @@ class SearchState(TypedDict, total=False):
     rewritten_query: str
     target_modules: List[Literal["ASSET", "HR", "FIN"]]
     multi_queries: List[str]
+
+    # N1a Self-RAG 路由：是否走向量检索链
+    need_rag: bool
+    self_rag_route_reason: str
 
     item_candidates: List[dict]
     confirmed_item_pk: Optional[str]
