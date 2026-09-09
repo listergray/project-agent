@@ -1,4 +1,5 @@
 from .llm_client import achain, astream  # noqa: F401
+from .lcel import lcel_invoke, lcel_json, lcel_text_chain  # noqa: F401
 from .embed_client import encode, get_embedding_dim, rerank  # noqa: F401
 from . import milvus_client  # noqa: F401
 from .milvus_client import (  # noqa: F401
@@ -10,12 +11,16 @@ from .milvus_client import (  # noqa: F401
     hybrid_search_chunks,
     search_item_names,
     delete_by_item_pk,
+    list_chunks_by_item_pk,
     stats,
 )
 
 __all__ = [
     "achain",
     "astream",
+    "lcel_invoke",
+    "lcel_json",
+    "lcel_text_chain",
     "encode",
     "get_embedding_dim",
     "rerank",
@@ -27,5 +32,6 @@ __all__ = [
     "hybrid_search_chunks",
     "search_item_names",
     "delete_by_item_pk",
+    "list_chunks_by_item_pk",
     "stats",
 ]

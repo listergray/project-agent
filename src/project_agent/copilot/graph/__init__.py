@@ -1,9 +1,12 @@
 """
-代码助手 LangGraph：5 节点线性流水线 + 最后一步"写文件"
-设计说明：
-- 5 个节点严格对应需求文档里的 5 个阶段：N1需求拆解 → N2代码生成 → N3审查重构 → N4单测 → N5文档
-- 最后再跑一个 write_all_files 节点，把 {generated_files}/{test_files} + api_doc_md 全部写到 output/ 目录。
-  演示时直接 `code output/copilot_xxx/` 打开看文件，10~14 个文件完整呈现，非常有说服力。
+代码助手 LangGraph：需求→代码→审查→单测→文档→落盘（5+1）
+
+【技能点 · AI 开发辅助落地】
+  ✅ 任务拆解（N1）→ AI 生成 Java/XML（N2）→ 人工可审的规则审查（N3）
+     → 单测生成（N4）→ 文档（N5）→ 小步落盘验证（N6）
+  ✅ 产物为 Spring Boot 样板，体现「Python AI 编排生成 Java 微服务脚手架」
+  📘 协作模式对齐 Cursor/Trae：脚手架与样板由 Agent 生成，架构与质量靠审查节点+人工把关
+  ⚠️ 本图未接 Checkpoint/HITL interrupt；并发/事务/边界在生成的 Java 注释与审查规则中强调
 """
 from __future__ import annotations
 

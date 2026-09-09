@@ -1,8 +1,12 @@
 """
-RAG 知识库：7 个导入节点 + 7 个检索节点 实现
-设计说明：
-- 每个节点函数都打「入口/出口耗时 + 写回 state 的字段数 + 错误」日志，出问题能一秒定位。
-- 节点间完全解耦：N4 分块失败不影响 N5 补"空 chunk"；N6 编码失败也不阻塞流水线（填零向量兜底）。
+RAG 知识库节点：导入 + 检索（含多查询 Fusion / Self-RAG / HITL / 忠实度）
+
+【技能点】
+  ✅ Prompt + 基础 RAG + 查询改写
+  ✅ 多查询 RAG-Fusion（N1b LCEL + N3 多路召回 + N5 RRF）
+  ✅ Self-RAG grade / 回跳
+  ✅ 图级 HITL（N6c）+ 答案忠实度 LCEL（N7b）
+  ✅ Function Calling 思考-行动（N7）
 """
 from __future__ import annotations
 
@@ -29,8 +33,18 @@ from project_agent.clients import (
     rerank,
 )
 from project_agent.core import new_trace_id
+from project_agent.rag_kb.self_rag import q_n6b_self_rag_grade
+from project_agent.rag_kb.fusion import q_n1b_multi_query
+from project_agent.rag_kb.faithfulness import q_n6c_hitl_retrieval, q_n7b_faithfulness
 from project_agent.tools.rag_tools import RAG_TOOLS, RAG_TOOLS_BY_NAME
-from project_agent.utils import Chunk, load, load_text_file, split_markdown
+from project_agent.utils import (
+    Chunk,
+    format_history_for_prompt,
+    load,
+    load_text_file,
+    split_markdown,
+    trim_messages,
+)
 
 # =====================================================================
 # 导入流水线（7 节点）
@@ -318,16 +332,10 @@ def q_n2_locate_item(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def q_n3_vector_recall(state: Dict[str, Any]) -> Dict[str, Any]:
-    """N3 向量召回：Top30 chunks"""
-    q = state["rewritten_query"]
-    q_vec = encode([q])[0]
-    hits = hybrid_search_chunks(
-        q_vec, top_k=30,
-        item_pk_filter=state.get("confirmed_item_pk"),
-        item_name_filter=state.get("confirmed_item_name"),
-    )
-    logger.info(f"[Search N3] 向量召回 {len(hits)} 条 chunks")
-    return {"recalled_chunks": hits}
+    """N3 向量召回：委托 fusion 多查询实现。"""
+    from project_agent.rag_kb.fusion import q_n3_vector_recall as _multi
+
+    return _multi(state)
 
 
 def q_n4_tool_fuzzy_recall(state: Dict[str, Any]) -> Dict[str, Any]:
@@ -436,6 +444,14 @@ def q_n7_answer_with_tools(state: Dict[str, Any]) -> Dict[str, Any]:
             f"内容：{c.get('content','')}\n"
         )
     context_text = "\n".join(ctx_blocks) if ctx_blocks else "（上下文为空，完全走工具查库或直说不知道）"
+    hist_text = format_history_for_prompt(trim_messages(state.get("messages") or []))
+    grade = state.get("self_rag_grade") or {}
+    grade_hint = ""
+    if grade:
+        grade_hint = (
+            f"【Self-RAG 评估】relevant={grade.get('relevant')} "
+            f"score={grade.get('score')} reason={grade.get('reason','')}\n"
+        )
 
     # 2) 系统 Prompt
     sys_prompt = (
@@ -451,7 +467,9 @@ def q_n7_answer_with_tools(state: Dict[str, Any]) -> Dict[str, Any]:
     user_prompt = (
         f"【用户原始问题】{q}\n"
         f"【改写后问题】{rewritten}\n"
-        f"【识别模式】{intent}\n\n"
+        f"【识别模式】{intent}\n"
+        f"{grade_hint}"
+        f"【近期对话（已窗口裁剪）】\n{hist_text}\n\n"
         f"【已召回上下文（RRF + Rerank）】\n{context_text}\n\n"
         "请基于以上信息回答；必要时调用 3 个工具，最多调用 3 轮。"
     )
@@ -560,12 +578,16 @@ IMPORT_NODES = [
 
 SEARCH_NODES = [
     ("q_n1_rewrite_intent", q_n1_rewrite_intent),
+    ("q_n1b_multi_query", q_n1b_multi_query),
     ("q_n2_locate_item", q_n2_locate_item),
     ("q_n3_vector_recall", q_n3_vector_recall),
     ("q_n4_tool_fuzzy_recall", q_n4_tool_fuzzy_recall),
     ("q_n5_rrf_fusion", q_n5_rrf_fusion),
     ("q_n6_rerank", q_n6_rerank),
+    ("q_n6b_self_rag_grade", q_n6b_self_rag_grade),
+    ("q_n6c_hitl_retrieval", q_n6c_hitl_retrieval),
     ("q_n7_answer_with_tools", q_n7_answer_with_tools),
+    ("q_n7b_faithfulness", q_n7b_faithfulness),
 ]
 
 __all__ = [
@@ -573,6 +595,8 @@ __all__ = [
     "SEARCH_NODES",
     "i_n1_parse_file", "i_n2_read_or_ocr", "i_n3_structure",
     "i_n4_semantic_split", "i_n5_extract_item", "i_n6_encode_vectors", "i_n7_write_milvus",
-    "q_n1_rewrite_intent", "q_n2_locate_item", "q_n3_vector_recall",
-    "q_n4_tool_fuzzy_recall", "q_n5_rrf_fusion", "q_n6_rerank", "q_n7_answer_with_tools",
+    "q_n1_rewrite_intent", "q_n1b_multi_query", "q_n2_locate_item", "q_n3_vector_recall",
+    "q_n4_tool_fuzzy_recall", "q_n5_rrf_fusion", "q_n6_rerank",
+    "q_n6b_self_rag_grade", "q_n6c_hitl_retrieval",
+    "q_n7_answer_with_tools", "q_n7b_faithfulness",
 ]

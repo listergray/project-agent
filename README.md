@@ -11,6 +11,8 @@
 本仓库把上面两句话 **落地成可运行的代码**。照着「快速启动 3 条命令」执行一遍，
 就能看到「Milvus 向量库 + 7 节点检索 + 工具调用日志 + 生成的 Java 代码文件」完整跑通。
 
+**混合架构**：项目库等基础业务 → Java / 芋道（`java-biz/`）；RAG / 解析 / 代码助手等 AI → 本仓 Python。详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+
 ---
 
 ## 📐 架构总览
@@ -127,8 +129,27 @@ copilot-run         # 跑 代码助手 5+1 流水线 → output/copilot_XXX 生�
 
 ### 可选：启动 HTTP API 做浏览器演示
 ```powershell
+# 先构建 React 前端（首次需 npm install）
+cd frontend
+npm install
+npm run build
+cd ..
+
 agent-api          # 等价于 uvicorn project_agent.api.server:app --port 8080
-# 浏览器打开 http://localhost:8080/docs → Swagger UI 直接点「Try it out」
+# 浏览器打开 http://localhost:8080/       → React 首页
+#            http://localhost:8080/projects → 项目管理
+#            http://localhost:8080/docs     → Swagger UI
+```
+
+开发联调（前端热更新）：
+```powershell
+# 终端 1：后端 API
+agent-api
+
+# 终端 2：Vite 开发服务器（/api 代理到 :8080）
+cd frontend
+npm run dev
+# 打开 http://localhost:5173/
 ```
 
 ---

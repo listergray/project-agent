@@ -81,6 +81,39 @@ class Settings(BaseSettings):
     redis_password: Optional[str] = None
     redis_db: int = 0
 
+    # ---------- Self-RAG ----------
+    self_rag_max_retries: int = Field(
+        1, description="检索不足时最多改写再检索次数（0=关闭重试）"
+    )
+
+    # ---------- RAG 工程化开关 ----------
+    enable_multi_query: bool = Field(True, description="多查询 RAG-Fusion")
+    multi_query_count: int = Field(3, description="含原问在内的查询条数（建议 3）")
+    enable_faithfulness: bool = Field(True, description="答案忠实度校验")
+    enable_graph_hitl: bool = Field(True, description="图级 interrupt HITL")
+    checkpoint_db_path: Path = Field(
+        default_factory=lambda: ROOT_DIR / "data" / "checkpoints.sqlite",
+        description="LangGraph Sqlite Checkpoint 路径",
+    )
+
+    # ---------- 会话窗口裁剪 ----------
+    chat_max_history_turns: int = Field(12, description="落盘保留的最大对话轮数（user+assistant 各算 1）")
+    chat_max_history_messages: int = Field(16, description="注入 Prompt 的最大消息条数")
+    chat_max_history_chars: int = Field(6000, description="注入 Prompt 的历史总字符上限")
+
+    # ---------- 项目库 Java 业务（芋道）----------
+    project_biz_base_url: str = Field(
+        "",
+        description="芋道/Java 项目库根地址，如 http://127.0.0.1:48080；空则用本地 JSON",
+    )
+    project_biz_timeout: int = Field(15, description="调用 Java 项目库超时秒")
+
+    # ---------- LangSmith ----------
+    langsmith_tracing: bool = Field(False, description="是否启用 LangSmith tracing")
+    langsmith_api_key: str = ""
+    langsmith_project: str = "project-agent"
+    langsmith_endpoint: str = "https://api.smith.langchain.com"
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

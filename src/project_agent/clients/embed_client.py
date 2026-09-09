@@ -1,9 +1,12 @@
 """
-Embedding + Rerank 客户端（BGE 系列，FlagEmbedding 本地加载，GPU 自动启用否则 CPU 降级）
-设计说明：
-1. 用单例 + 懒加载，首次推理才把模型拉进内存，避免启动慢
-2. 缓存哈希：相同文本命中缓存就不重复编码，相同文档重复导入时 Embedding 耗时降 90%
-3. 编码失败兜底：报错时返回零向量 + 打 ERROR 日志，不要让整个导入流水线因单条失败中断
+Embedding + Rerank（BGE 本地）
+
+【技能点 · 向量表征】
+  ✅ Embedding：FlagEmbedding / sentence-transformers，BGE-small-zh
+  ✅ Rerank：bge-reranker（检索后精排，对应高级 RAG 的 re-rank 阶段）
+  ✅ 进程内哈希缓存，重复文本免重复编码
+
+与 milvus_client 的 COSINE / IVF 检索配合构成「编码 → 入库/召回 → 精排」链路。
 """
 from __future__ import annotations
 

@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>项目管理 · Project Agent</title>
+<style>
+  :root{
+    --primary:#3b82f6;--primary2:#2563eb;--emerald:#10b981;--amber:#f59e0b;--rose:#ef4444;--violet:#7c3aed;
+    --slate-50:#f8fafc;--slate-100:#f1f5f9;--slate-200:#e2e8f0;--slate-300:#cbd5e1;--slate-400:#94a3b8;
+    --slate-500:#64748b;--slate-600:#475569;--slate-700:#334155;--slate-900:#0f172a;
+    --glass:rgba(255,255,255,.55);--glass-strong:rgba(255,255,255,.72);
+    --shadow:0 12px 40px rgba(15,23,42,.06);--radius:14px;--radius-lg:18px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;min-height:100%;}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:var(--slate-900);
+    background:
+      radial-gradient(1100px 700px at 8% -10%, #dbeafe 0%, transparent 55%),
+      radial-gradient(900px 600px at 100% 10%, #e0e7ff 0%, transparent 50%),
+      radial-gradient(700px 500px at 50% 110%, #fce7f3 0%, transparent 55%),
+      linear-gradient(180deg,#f8fbff 0%,#f1f5ff 100%);
+    min-height:100vh;
+  }
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:20px 44px;}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:var(--slate-900);text-decoration:none;}
+  .brand-logo{
+    width:34px;height:34px;border-radius:9px;background:linear-gradient(135deg,#3b82f6,#2563eb);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px;
+    box-shadow:0 6px 20px rgba(59,130,246,.35);
+  }
+  .ghost-btn{
+    border:1px solid #e2e8f0;background:rgba(255,255,255,.65);backdrop-filter:blur(10px);
+    border-radius:999px;padding:7px 16px;font-size:13px;color:var(--slate-900);
+    cursor:pointer;text-decoration:none;transition:all .18s ease;
+  }
+  .ghost-btn:hover{background:#fff;border-color:#cbd5e1;}
+  .hero{max-width:1240px;margin:0 auto;padding:18px 44px 8px;}
+  .hero h2{font-size:14px;color:var(--primary);font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:8px;}
+  .hero h2::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--primary);box-shadow:0 0 0 4px rgba(59,130,246,.15);}
+  .hero h1{
+    font-size:36px;font-weight:700;margin:0 0 8px;letter-spacing:-1px;
+    background:linear-gradient(135deg,#0f172a 30%,#3b82f6);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+  }
+  .hero p{margin:0;font-size:13.5px;color:var(--slate-500);line-height:1.7;max-width:720px;}
+
+  .layout{max-width:1240px;margin:0 auto;padding:20px 44px 48px;display:grid;grid-template-columns:220px 1fr;gap:22px;}
+  @media (max-width:980px){.layout{grid-template-columns:1fr;padding:16px 20px 40px;}.nav,.hero{padding-left:20px;padding-right:20px;}}
+
+  .left-col{
+    background:var(--glass);border:1px solid rgba(255,255,255,.9);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow);padding:20px 18px;backdrop-filter:blur(14px);height:fit-content;position:sticky;top:20px;
+  }
+  .left-col h4{margin:0 0 16px;font-size:12px;color:var(--slate-500);letter-spacing:.4px;text-transform:uppercase;}
+  .step{display:flex;align-items:flex-start;gap:12px;padding:10px 0;position:relative;}
+  .step:not(:last-child)::before{
+    content:"";position:absolute;left:13px;top:38px;width:2px;height:34px;
+    background:linear-gradient(180deg,var(--primary),var(--slate-200));opacity:.5;
+  }
+  .step.done:not(:last-child)::before{background:linear-gradient(180deg,var(--emerald),var(--primary));opacity:1;}
+  .step .num{
+    width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:#fff;border:2px solid var(--slate-200);color:var(--slate-400);font-size:12px;font-weight:700;flex-shrink:0;
+  }
+  .step.active .num{background:linear-gradient(135deg,var(--primary),var(--primary2));border-color:transparent;color:#fff;box-shadow:0 4px 14px rgba(59,130,246,.4);}
+  .step.done .num{background:var(--emerald);border-color:transparent;color:#fff;}
+  .step .t .a{font-size:13px;font-weight:600;color:var(--slate-900);}
+  .step .t .b{font-size:11px;color:var(--slate-400);margin-top:2px;line-height:1.4;}
+  .step.active .t .a{color:var(--primary2);}
+  .step.done .t .a{color:var(--emerald);}
+  .mini-stats{margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .mini-stat{background:rgba(255,255,255,.7);border:1px solid var(--slate-200);border-radius:10px;padding:10px;}
+  .mini-stat .v{font-size:18px;font-weight:700;}
+  .mini-stat .l{font-size:11px;color:var(--slate-500);margin-top:2px;}
+
+  .right-col{display:flex;flex-direction:column;gap:16px;min-width:0;}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;}
+  .tab{
+    border:1px solid var(--slate-200);background:rgba(255,255,255,.65);border-radius:999px;
+    padding:8px 16px;font-size:13px;cursor:pointer;color:var(--slate-600);transition:all .15s;
+  }
+  .tab.on{background:var(--slate-900);color:#fff;border-color:transparent;}
+  .panel{display:none;}
+  .panel.on{display:block;animation:fadeUp .25s ease;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+
+  .card{
+    background:var(--glass-strong);border:1px solid rgba(255,255,255,.9);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow);backdrop-filter:blur(14px);padding:20px 22px;
+  }
+  .card h3{margin:0 0 6px;font-size:16px;font-weight:600;}
+  .card .sub{margin:0 0 16px;font-size:12.5px;color:var(--slate-500);line-height:1.6;}
+
+  .mode-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;}
+  @media (max-width:640px){.mode-row{grid-template-columns:1fr;}}
+  .mode{
+    border:1.5px solid var(--slate-200);border-radius:14px;padding:16px;cursor:pointer;
+    background:rgba(255,255,255,.5);transition:all .18s;
+  }
+  .mode:hover{border-color:#93c5fd;background:#fff;}
+  .mode.on{border-color:var(--primary);background:rgba(219,234,254,.45);box-shadow:0 0 0 3px rgba(59,130,246,.12);}
+  .mode .t{font-size:14px;font-weight:600;margin-bottom:4px;}
+  .mode .d{font-size:12px;color:var(--slate-500);line-height:1.5;}
+
+  .drop{
+    border:2px dashed var(--primary);border-radius:18px;padding:28px 18px;text-align:center;cursor:pointer;
+    background:radial-gradient(600px 240px at 50% -20%, rgba(219,234,254,.65), transparent 70%), rgba(255,255,255,.5);
+    transition:all .2s;margin-bottom:14px;
+  }
+  .drop.over{background:rgba(219,234,254,.75);}
+  .drop h4{margin:0 0 6px;font-size:16px;}
+  .drop p{margin:0;font-size:12.5px;color:var(--slate-500);}
+  .drop input{display:none;}
+  .file-chip{
+    display:inline-flex;align-items:center;gap:8px;margin-top:10px;
+    background:#fff;border:1px solid var(--slate-200);border-radius:999px;padding:6px 12px;font-size:12.5px;
+  }
+
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;}
+  @media (max-width:720px){.form-grid{grid-template-columns:1fr;}}
+  .field{display:flex;flex-direction:column;gap:5px;}
+  .field.full{grid-column:1/-1;}
+  .field label{font-size:12px;color:var(--slate-500);font-weight:500;}
+  .field label .req{color:var(--rose);}
+  .field input,.field select,.field textarea{
+    border:1px solid var(--slate-200);border-radius:10px;padding:9px 12px;font-size:13.5px;
+    background:#fff;color:var(--slate-900);outline:none;font-family:inherit;
+    transition:border-color .15s, box-shadow .15s;
+  }
+  .field input:focus,.field select:focus,.field textarea:focus{
+    border-color:#93c5fd;box-shadow:0 0 0 3px rgba(59,130,246,.15);
+  }
+  .field textarea{min-height:78px;resize:vertical;line-height:1.55;}
+
+  .actions{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:16px;}
+  .hint{font-size:12.5px;color:var(--slate-500);}
+  .hint b{color:var(--slate-700);}
+  .btn-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .btn{
+    border:none;border-radius:999px;padding:10px 20px;font-size:13px;font-weight:600;cursor:pointer;
+    transition:all .15s;display:inline-flex;align-items:center;gap:6px;
+  }
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
+  .btn-primary{background:linear-gradient(135deg,var(--primary),var(--primary2));color:#fff;box-shadow:0 8px 22px rgba(59,130,246,.3);}
+  .btn-primary:hover:not(:disabled){transform:translateY(-1px);}
+  .btn-ghost{background:rgba(255,255,255,.8);border:1px solid var(--slate-200);color:var(--slate-600);}
+  .btn-ok{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 8px 22px rgba(16,185,129,.28);}
+  .btn-danger{background:rgba(254,242,242,.95);border:1px solid #fecaca;color:var(--rose);}
+
+  .banner{
+    display:none;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;font-size:13px;margin-bottom:14px;
+  }
+  .banner.show{display:flex;}
+  .banner.parse{background:rgba(219,234,254,.7);border:1px solid #bfdbfe;color:#1e40af;}
+  .banner.ok{background:rgba(209,250,229,.7);border:1px solid #a7f3d0;color:#065f46;}
+
+  .list{display:flex;flex-direction:column;gap:10px;}
+  .item{
+    background:rgba(255,255,255,.7);border:1px solid var(--slate-200);border-radius:14px;padding:14px 16px;
+    transition:all .15s;
+  }
+  .item:hover{border-color:#cbd5e1;background:#fff;}
+  .item .top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap;}
+  .item .name{font-size:15px;font-weight:600;margin:0 0 4px;}
+  .item .meta{font-size:12px;color:var(--slate-500);line-height:1.5;}
+  .badge{
+    display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600;
+  }
+  .badge.draft{background:#f1f5f9;color:#475569;}
+  .badge.pending{background:#fef3c7;color:#b45309;}
+  .badge.approved{background:#d1fae5;color:#047857;}
+  .badge.rejected{background:#fee2e2;color:#b91c1c;}
+  .item .ops{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+  .empty{text-align:center;padding:36px 16px;color:var(--slate-400);font-size:13.5px;}
+
+  .timeline{margin-top:10px;padding-left:4px;}
+  .tl{display:flex;gap:10px;font-size:12px;color:var(--slate-500);padding:4px 0;position:relative;}
+  .tl::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--primary);margin-top:5px;flex-shrink:0;}
+
+  .toast{
+    position:fixed;bottom:24px;left:24px;z-index:50;padding:12px 18px;border-radius:12px;font-size:13.5px;
+    background:rgba(15,23,42,.94);color:#fff;transform:translateY(16px);opacity:0;transition:all .28s;pointer-events:none;
+  }
+  .toast.show{transform:translateY(0);opacity:1;}
+  .toast.err{background:rgba(220,38,38,.94);}
+  .toast.ok{background:rgba(16,185,129,.94);}
+
+  .modal{position:fixed;inset:0;background:rgba(15,23,42,.45);backdrop-filter:blur(3px);display:none;align-items:center;justify-content:center;z-index:40;}
+  .modal.show{display:flex;}
+  .modal-card{background:#fff;border-radius:16px;padding:22px 24px;width:min(420px,92vw);box-shadow:0 24px 60px rgba(15,23,42,.25);}
+  .modal-card h3{margin:0 0 8px;font-size:17px;}
+  .modal-card p{margin:0 0 12px;font-size:13px;color:var(--slate-500);line-height:1.55;}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <a class="brand" href="/">
+    <div class="brand-logo">P</div>
+    <span>Project Agent</span>
+  </a>
+  <a class="ghost-btn" href="/">← 返回首页</a>
+</nav>
+
+<section class="hero">
+  <h2>立项 · 解析 · 确认 · 审批</h2>
+  <h1>项目管理</h1>
+  <p>支持人工录入或上传立项文档自动解析；解析结果先进入表单人工确认，再提交审批。完整流程：录入 → 确认 → 提交 → 审批通过/驳回。</p>
+</section>
+
+<div class="layout">
+  <aside class="left-col">
+    <h4>录入审批流程</h4>
+    <div class="step" id="s1"><div class="num">1</div><div class="t"><div class="a">选择录入方式</div><div class="b">人工 / 文件解析</div></div></div>
+    <div class="step" id="s2"><div class="num">2</div><div class="t"><div class="a">填写与确认</div><div class="b">表单人工核对</div></div></div>
+    <div class="step" id="s3"><div class="num">3</div><div class="t"><div class="a">提交审批</div><div class="b">进入待审队列</div></div></div>
+    <div class="step" id="s4"><div class="num">4</div><div class="t"><div class="a">审批结论</div><div class="b">通过或驳回</div></div></div>
+    <div class="mini-stats" id="miniStats">
+      <div class="mini-stat"><div class="v" id="stDraft">0</div><div class="l">草稿</div></div>
+      <div class="mini-stat"><div class="v" id="stPending">0</div><div class="l">待审批</div></div>
+      <div class="mini-stat"><div class="v" id="stApproved">0</div><div class="l">已通过</div></div>
+      <div class="mini-stat"><div class="v" id="stRejected">0</div><div class="l">已驳回</div></div>
+    </div>
+  </aside>
+
+  <main class="right-col">
+    <div class="tabs">
+      <button class="tab on" data-tab="create">新建立项</button>
+      <button class="tab" data-tab="approve">审批中心</button>
+      <button class="tab" data-tab="list">全部项目</button>
+    </div>
+
+    <!-- 新建 -->
+    <section class="panel on" id="panel-create">
+      <div class="card">
+        <h3>① 选择录入方式</h3>
+        <p class="sub">可直接填表，也可上传 .md / .txt / .pdf，系统解析后回填表单供你确认。</p>
+        <div class="mode-row">
+          <div class="mode on" id="modeManual" data-mode="manual">
+            <div class="t">✍️ 人工录入</div>
+            <div class="d">空白表单，手动填写项目编号、负责人、预算等字段后提交。</div>
+          </div>
+          <div class="mode" id="modeFile" data-mode="file">
+            <div class="t">📤 文件上传解析</div>
+            <div class="d">上传立项文档，自动抽取字段 → 进入表单确认 → 再提交审批。</div>
+          </div>
+        </div>
+
+        <div id="uploadBlock" style="display:none;">
+          <label class="drop" id="drop">
+            <h4>拖拽立项文件到这里</h4>
+            <p>或点击选择 · 支持 .md / .txt / .pdf · 单文件 ≤ 20MB</p>
+            <div class="file-chip" id="fileChip" style="display:none;"></div>
+            <input id="fileInput" type="file" accept=".md,.markdown,.txt,.pdf" />
+          </label>
+          <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn btn-primary" id="btnParse" disabled>解析并填入表单</button>
+            <button class="btn btn-ghost" id="btnClearFile" disabled>清除文件</button>
+          </div>
+        </div>
+
+        <div class="banner parse" id="parseBanner"></div>
+
+        <h3>② 项目信息确认</h3>
+        <p class="sub">解析或手填后请逐项核对；确认无误再保存草稿或提交审批。</p>
+
+        <form id="projectForm" autocomplete="off">
+          <div class="form-grid">
+            <div class="field"><label>项目编号</label><input name="project_code" placeholder="如 PRJ-2026-001" /></div>
+            <div class="field"><label>项目名称 <span class="req">*</span></label><input name="project_name" required placeholder="必填" /></div>
+            <div class="field"><label>项目类型</label>
+              <select name="project_type">
+                <option>研发</option><option>实施</option><option>运维</option><option>预研</option><option>其他</option>
+              </select>
+            </div>
+            <div class="field"><label>优先级</label>
+              <select name="priority"><option>P0</option><option selected>P1</option><option>P2</option></select>
+            </div>
+            <div class="field"><label>项目负责人</label><input name="owner" placeholder="姓名" /></div>
+            <div class="field"><label>所属部门</label><input name="department" placeholder="如 技术中心" /></div>
+            <div class="field"><label>业务发起人</label><input name="sponsor" placeholder="业务方 / Sponsor" /></div>
+            <div class="field"><label>风险等级</label>
+              <select name="risk_level"><option>低</option><option selected>中</option><option>高</option></select>
+            </div>
+            <div class="field"><label>计划开始</label><input name="start_date" type="date" /></div>
+            <div class="field"><label>计划结束</label><input name="end_date" type="date" /></div>
+            <div class="field"><label>预算（元）</label><input name="budget" type="number" min="0" step="0.01" value="0" /></div>
+            <div class="field"><label>核心成员</label><input name="members" placeholder="逗号分隔" /></div>
+            <div class="field full"><label>项目概述</label><textarea name="description" placeholder="背景、范围、价值"></textarea></div>
+            <div class="field full"><label>目标与交付物</label><textarea name="goals" placeholder="里程碑 / 交付清单"></textarea></div>
+            <div class="field full"><label>备注</label><textarea name="remark" placeholder="可选"></textarea></div>
+            <input type="hidden" name="source_file" />
+          </div>
+        </form>
+
+        <div class="actions">
+          <div class="hint" id="formHint">当前：新立项 · 未保存</div>
+          <div class="btn-row">
+            <button class="btn btn-ghost" id="btnResetForm">重置</button>
+            <button class="btn btn-ghost" id="btnSaveDraft">保存草稿</button>
+            <button class="btn btn-primary" id="btnSubmit">确认并提交审批</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 审批 -->
+    <section class="panel" id="panel-approve">
+      <div class="card">
+        <h3>待审批队列</h3>
+        <p class="sub">申请人提交后进入此列表；审批人可填写意见后通过或驳回。驳回后申请人可回到「新建立项」修改再提。</p>
+        <div class="list" id="approveList"><div class="empty">暂无待审批项目</div></div>
+      </div>
+    </section>
+
+    <!-- 列表 -->
+    <section class="panel" id="panel-list">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;">
+          <div>
+            <h3 style="margin:0;">全部项目</h3>
+            <p class="sub" style="margin:6px 0 0;">按最近更新排序 · 可查看状态流转历史</p>
+          </div>
+          <select id="filterStatus" style="border:1px solid var(--slate-200);border-radius:999px;padding:7px 12px;font-size:13px;background:#fff;">
+            <option value="">全部状态</option>
+            <option value="draft">草稿</option>
+            <option value="pending">待审批</option>
+            <option value="approved">已通过</option>
+            <option value="rejected">已驳回</option>
+          </select>
+        </div>
+        <div class="list" id="allList"><div class="empty">暂无项目</div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="reviewModal">
+  <div class="modal-card">
+    <h3 id="rmTitle">审批确认</h3>
+    <p id="rmDesc">请填写审批意见后确认。</p>
+    <div class="field" style="margin-bottom:12px;">
+      <label>审批人</label>
+      <input id="rmReviewer" value="审批人" />
+    </div>
+    <div class="field" style="margin-bottom:16px;">
+      <label>审批意见</label>
+      <textarea id="rmComment" placeholder="可选"></textarea>
+    </div>
+    <div class="btn-row" style="justify-content:flex-end;">
+      <button class="btn btn-ghost" id="rmCancel">取消</button>
+      <button class="btn" id="rmConfirm">确认</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "";
+const $ = (s, el=document) => el.querySelector(s);
+const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+
+let mode = "manual";
+let currentFile = null;
+let editingId = null;
+let reviewCtx = null; // {id, action}
+
+const STATUS_LABEL = {draft:"草稿", pending:"待审批", approved:"已通过", rejected:"已驳回"};
+
+/* tabs */
+$$(".tab").forEach(t => t.addEventListener("click", () => {
+  $$(".tab").forEach(x => x.classList.remove("on"));
+  t.classList.add("on");
+  $$(".panel").forEach(p => p.classList.remove("on"));
+  $("#panel-" + t.dataset.tab).classList.add("on");
+  if (t.dataset.tab === "approve") loadApprove();
+  if (t.dataset.tab === "list") loadAll();
+}));
+
+/* mode */
+function setMode(m) {
+  mode = m;
+  $("#modeManual").classList.toggle("on", m === "manual");
+  $("#modeFile").classList.toggle("on", m === "file");
+  $("#uploadBlock").style.display = m === "file" ? "block" : "none";
+  setStep(1, "done");
+  setStep(2, "active");
+}
+$("#modeManual").onclick = () => setMode("manual");
+$("#modeFile").onclick = () => setMode("file");
+
+/* stepper */
+function setStep(n, status) {
+  const el = $("#s" + n);
+  el.classList.remove("active", "done");
+  if (status) el.classList.add(status);
+}
+function resetSteps() {
+  [1,2,3,4].forEach(n => setStep(n, n === 1 ? "active" : ""));
+}
+
+/* file */
+const drop = $("#drop"), fileInput = $("#fileInput");
+["dragenter","dragover"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add("over"); }));
+["dragleave","drop"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", ev => { const f = ev.dataTransfer.files?.[0]; if (f) setFile(f); });
+drop.addEventListener("click", () => fileInput.click());
+fileInput.addEventListener("change", () => { const f = fileInput.files?.[0]; if (f) setFile(f); fileInput.value = ""; });
+
+function setFile(f) {
+  const ext = "." + (f.name.split(".").pop() || "").toLowerCase();
+  if (![".md",".markdown",".txt",".pdf"].includes(ext)) return toast("不支持的格式", "err");
+  if (f.size > 20 * 1024 * 1024) return toast("文件超过 20MB", "err");
+  currentFile = f;
+  const chip = $("#fileChip");
+  chip.style.display = "inline-flex";
+  chip.textContent = `📎 ${f.name} · ${(f.size/1024).toFixed(1)} KB`;
+  $("#btnParse").disabled = false;
+  $("#btnClearFile").disabled = false;
+  toast("已选择文件", "ok");
+}
+$("#btnClearFile").onclick = () => {
+  currentFile = null;
+  $("#fileChip").style.display = "none";
+  $("#btnParse").disabled = true;
+  $("#btnClearFile").disabled = true;
+  $("#parseBanner").classList.remove("show");
+};
+
+$("#btnParse").onclick = async () => {
+  if (!currentFile) return;
+  $("#btnParse").disabled = true;
+  $("#btnParse").textContent = "解析中…";
+  try {
+    const fd = new FormData();
+    fd.append("file", currentFile);
+    const r = await fetch(API + "/api/v1/projects/parse", { method: "POST", body: fd });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.detail ? (typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail)) : "解析失败");
+    fillForm(j.fields);
+    editingId = null;
+    const conf = Math.round((j.confidence || 0) * 100);
+    const ban = $("#parseBanner");
+    ban.className = "banner parse show";
+    ban.textContent = `已解析「${j.filename}」· 方式 ${j.method} · 置信度 ${conf}% · 请人工确认后提交`;
+    $("#formHint").innerHTML = `解析回填 · 置信度 <b>${conf}%</b> · 尚未保存`;
+    setStep(1, "done"); setStep(2, "active");
+    toast("解析完成，请确认表单", "ok");
+  } catch (e) {
+    toast("解析失败: " + e.message, "err");
+  } finally {
+    $("#btnParse").disabled = !currentFile;
+    $("#btnParse").textContent = "解析并填入表单";
+  }
+};
+
+function fillForm(fields) {
+  const form = $("#projectForm");
+  for (const [k, v] of Object.entries(fields || {})) {
+    const el = form.elements[k];
+    if (!el) continue;
+    el.value = v == null ? "" : v;
+  }
+}
+
+function readForm() {
+  const form = $("#projectForm");
+  const data = Object.fromEntries(new FormData(form).entries());
+  data.budget = parseFloat(data.budget || "0") || 0;
+  return data;
+}
+
+async function saveDraft() {
+  const data = readForm();
+  if (!data.project_name?.trim()) { toast("请填写项目名称", "err"); return null; }
+  const url = editingId
+    ? `${API}/api/v1/projects/${editingId}`
+    : `${API}/api/v1/projects`;
+  const method = editingId ? "PUT" : "POST";
+  const r = await fetch(url, { method, headers: {"Content-Type":"application/json"}, body: JSON.stringify(data) });
+  const j = await r.json();
+  if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail));
+  editingId = j.id;
+  $("#formHint").innerHTML = `草稿已保存 · ID <b>${j.id}</b>`;
+  setStep(2, "done");
+  refreshStats();
+  return j;
+}
+
+$("#btnSaveDraft").onclick = async () => {
+  try {
+    await saveDraft();
+    toast("草稿已保存", "ok");
+  } catch (e) { toast(e.message, "err"); }
+};
+
+$("#btnSubmit").onclick = async () => {
+  try {
+    let j = await saveDraft();
+    if (!j) return;
+    const r = await fetch(`${API}/api/v1/projects/${j.id}/submit`, { method: "POST" });
+    const out = await r.json();
+    if (!r.ok) throw new Error(typeof out.detail === "string" ? out.detail : JSON.stringify(out.detail));
+    $("#formHint").innerHTML = `已提交审批 · <b>${out.project_name}</b>`;
+    const ban = $("#parseBanner");
+    ban.className = "banner ok show";
+    ban.textContent = "已提交审批，可在「审批中心」处理，或在「全部项目」查看进度。";
+    setStep(2, "done"); setStep(3, "done"); setStep(4, "active");
+    toast("已提交审批", "ok");
+    refreshStats();
+  } catch (e) { toast(e.message, "err"); }
+};
+
+$("#btnResetForm").onclick = () => {
+  $("#projectForm").reset();
+  editingId = null;
+  $("#parseBanner").classList.remove("show");
+  $("#formHint").textContent = "当前：新立项 · 未保存";
+  resetSteps();
+  if (mode === "file") setStep(1, "done");
+};
+
+/* lists */
+function statusBadge(s) {
+  return `<span class="badge ${s}">${STATUS_LABEL[s] || s}</span>`;
+}
+
+function historyHtml(hist) {
+  if (!hist?.length) return "";
+  return `<div class="timeline">${hist.slice(-5).reverse().map(h =>
+    `<div class="tl">${h.at} · ${h.action} · ${h.by}${h.note ? " · " + h.note : ""}</div>`
+  ).join("")}</div>`;
+}
+
+function renderItem(p, {approve=false} = {}) {
+  const div = document.createElement("div");
+  div.className = "item";
+  div.innerHTML = `
+    <div class="top">
+      <div>
+        <div class="name">${esc(p.project_name || "未命名")}</div>
+        <div class="meta">
+          ${esc(p.project_code || "无编号")} · ${esc(p.project_type)} · ${esc(p.owner || "未指定负责人")}
+          · 预算 ¥${Number(p.budget||0).toLocaleString()} · 更新 ${esc(p.updated_at || "—")}
+          ${p.source_file ? " · 来源 " + esc(p.source_file) : ""}
+        </div>
+      </div>
+      ${statusBadge(p.status)}
+    </div>
+    ${p.description ? `<div class="meta" style="margin-top:8px;">${esc(p.description).slice(0,160)}</div>` : ""}
+    ${historyHtml(p.history)}
+    <div class="ops"></div>
+  `;
+  const ops = $(".ops", div);
+  if (approve && p.status === "pending") {
+    ops.innerHTML = `
+      <button class="btn btn-ok">通过</button>
+      <button class="btn btn-danger">驳回</button>
+    `;
+    ops.children[0].onclick = () => openReview(p.id, "approve");
+    ops.children[1].onclick = () => openReview(p.id, "reject");
+  } else if (p.status === "draft" || p.status === "rejected") {
+    const b = document.createElement("button");
+    b.className = "btn btn-ghost";
+    b.textContent = "继续编辑";
+    b.onclick = () => {
+      fillForm(p);
+      editingId = p.id;
+      $$(".tab").forEach(x => x.classList.toggle("on", x.dataset.tab === "create"));
+      $$(".panel").forEach(x => x.classList.toggle("on", x.id === "panel-create"));
+      $("#formHint").innerHTML = `编辑中 · ID <b>${p.id}</b>`;
+      setMode(p.source_file ? "file" : "manual");
+      setStep(2, "active");
+      toast("已载入到表单", "ok");
+    };
+    ops.appendChild(b);
+  }
+  return div;
+}
+
+async function loadApprove() {
+  const box = $("#approveList");
+  box.innerHTML = `<div class="empty">加载中…</div>`;
+  try {
+    const r = await fetch(API + "/api/v1/projects?status=pending");
+    const j = await r.json();
+    const items = j.items || [];
+    if (!items.length) { box.innerHTML = `<div class="empty">暂无待审批项目</div>`; return; }
+    box.innerHTML = "";
+    items.forEach(p => box.appendChild(renderItem(p, {approve:true})));
+  } catch (e) {
+    box.innerHTML = `<div class="empty">加载失败</div>`;
+  }
+}
+
+async function loadAll() {
+  const box = $("#allList");
+  const st = $("#filterStatus").value;
+  box.innerHTML = `<div class="empty">加载中…</div>`;
+  try {
+    const r = await fetch(API + "/api/v1/projects" + (st ? `?status=${st}` : ""));
+    const j = await r.json();
+    const items = j.items || [];
+    if (!items.length) { box.innerHTML = `<div class="empty">暂无项目</div>`; return; }
+    box.innerHTML = "";
+    items.forEach(p => box.appendChild(renderItem(p)));
+  } catch (e) {
+    box.innerHTML = `<div class="empty">加载失败</div>`;
+  }
+}
+$("#filterStatus").onchange = loadAll;
+
+function openReview(id, action) {
+  reviewCtx = { id, action };
+  $("#rmTitle").textContent = action === "approve" ? "确认通过？" : "确认驳回？";
+  $("#rmDesc").textContent = action === "approve"
+    ? "通过后项目状态变为「已通过」，流程结束。"
+    : "驳回后申请人可修改表单并重新提交。";
+  $("#rmConfirm").className = "btn " + (action === "approve" ? "btn-ok" : "btn-danger");
+  $("#rmConfirm").textContent = action === "approve" ? "确认通过" : "确认驳回";
+  $("#reviewModal").classList.add("show");
+}
+$("#rmCancel").onclick = () => { $("#reviewModal").classList.remove("show"); reviewCtx = null; };
+$("#reviewModal").onclick = e => { if (e.target.id === "reviewModal") $("#rmCancel").click(); };
+$("#rmConfirm").onclick = async () => {
+  if (!reviewCtx) return;
+  try {
+    const r = await fetch(`${API}/api/v1/projects/${reviewCtx.id}/review`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        action: reviewCtx.action,
+        reviewer: $("#rmReviewer").value || "审批人",
+        comment: $("#rmComment").value || "",
+      }),
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail));
+    $("#reviewModal").classList.remove("show");
+    setStep(4, "done");
+    toast(reviewCtx.action === "approve" ? "已通过" : "已驳回", "ok");
+    reviewCtx = null;
+    refreshStats();
+    loadApprove();
+  } catch (e) { toast(e.message, "err"); }
+};
+
+async function refreshStats() {
+  try {
+    const r = await fetch(API + "/api/v1/projects/stats");
+    const j = await r.json();
+    $("#stDraft").textContent = j.draft ?? 0;
+    $("#stPending").textContent = j.pending ?? 0;
+    $("#stApproved").textContent = j.approved ?? 0;
+    $("#stRejected").textContent = j.rejected ?? 0;
+  } catch (_) {}
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+}
+function toast(msg, type) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.className = "toast show " + (type || "");
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => t.classList.remove("show"), 3200);
+}
+
+resetSteps();
+setStep(1, "active");
+refreshStats();
+</script>
+</body>
+</html>

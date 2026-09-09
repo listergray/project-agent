@@ -1,10 +1,14 @@
 """
-Milvus 客户端（向量库，封装 RAG 知识库常用的：建集合 / 查集合 / 混合检索 / 批量插入）
-设计说明：
-1. 我用两个 Collection 做双层索引：kb_item_names（文档级检索，定位是"哪本手册"）
-   + kb_chunks（段落级，取具体章节内容），解决"长文档命中章节分散"问题
-2. 混合检索：dense 向量 cosine 相似 + 关键字（item_name/title）过滤权重融合
-3. 幂等：插入前按 pk 删重，避免重复导入导致向量膨胀
+Milvus 向量库客户端（生产向）
+
+【技能点 · 向量库】
+  ✅ Milvus：双集合 kb_item_names（文档级）+ kb_chunks（段落级）
+  ✅ Embedding 维度对齐 BGE；检索 metric=COSINE（余弦相似度）
+  ✅ 向量索引：当前 IVF_FLAT（小数据友好）；大规模可改为 HNSW（见 _auto_index 注释）
+  ✅ 元数据过滤：hybrid_search_chunks 支持 item_pk / item_name 的 expr 过滤
+  ❌ Chroma：本仓未接（本地轻量开发可用 Chroma 做同接口替身，生产保持 Milvus）
+
+幂等：按 pk 先删后插，避免重复导入膨胀。
 """
 from __future__ import annotations
 
@@ -116,6 +120,8 @@ def _auto_index(dim: int) -> Dict[str, Any]:
     """小数据量用 IVF_FLAT，大规模换 HNSW；Milvus 2.x 对 IVF_FLAT 的参数约束更宽松"""
     return {
         "metric_type": "COSINE",
+        # 索引策略：小数据 IVF_FLAT；生产大规模建议改 HNSW（nlist→M/efConstruction）
+        # 技能点：熟悉 IVF / HNSW 选型差异（召回率 vs 构建/查询成本）
         "index_type": "IVF_FLAT",
         "params": {"nlist": max(64, min(1024, dim))},
     }
@@ -222,14 +228,58 @@ def search_item_names(query_vector: Any, *, top_k: int = 5) -> List[Dict[str, An
     return out
 
 
-def delete_by_item_pk(item_pk: str) -> None:
-    """联动删除：文档级 + 段落级"""
+def delete_by_item_pk(item_pk: str) -> int:
+    """联动删除：文档级 + 段落级。返回删除的 chunks 总数（精确值）。
+
+    Milvus 的 num_entities 是段级统计，flush 后不一定立即更新（要走 segment merge），
+    所以不依赖 num_entities 差值。改成「先 query 出所有 pk，统计 pk 数，再 delete」。
+    """
     _connect()
+    deleted_chunks = 0
     if utility.has_collection(COLL_CHUNKS):
-        Collection(COLL_CHUNKS).delete(expr=f'item_pk == "{_escape(item_pk)}"')
+        col = Collection(COLL_CHUNKS)
+        # 先列出该 item_pk 下的所有 pk（Milvus query 限制 max 16384，足够业务）
+        rows = col.query(
+            expr=f'item_pk == "{_escape(item_pk)}"',
+            output_fields=["pk"],
+            limit=16384,
+        )
+        deleted_chunks = len(rows)
+        col.delete(expr=f'item_pk == "{_escape(item_pk)}"')
+        col.flush()
     if utility.has_collection(COLL_ITEM_NAMES):
         Collection(COLL_ITEM_NAMES).delete(expr=f'pk == "{_escape(item_pk)}"')
-    logger.info(f"[Milvus] deleted item_pk={item_pk}")
+        Collection(COLL_ITEM_NAMES).flush()
+    logger.info(f"[Milvus] deleted item_pk={item_pk} chunks_deleted={deleted_chunks}")
+    return deleted_chunks
+
+
+def list_chunks_by_item_pk(item_pk: str, *, max_chars: int = 200) -> List[Dict[str, Any]]:
+    """按 item_pk 列所有 chunks（不跑向量检索，纯 expr 查全）。前端预览用。"""
+    _connect()
+    col = Collection(COLL_CHUNKS)
+    # Milvus query() 必须加载 collection；load() 是幂等的
+    col.load()
+    res = col.query(
+        expr=f'item_pk == "{_escape(item_pk)}"',
+        output_fields=["pk", "item_pk", "item_name", "file_title", "title_path", "content", "chunk_index"],
+        limit=16384,
+    )
+    out: List[Dict[str, Any]] = []
+    for r in res:
+        c = r.get("content") or ""
+        out.append({
+            "pk": r.get("pk"),
+            "item_pk": r.get("item_pk"),
+            "item_name": r.get("item_name"),
+            "file_title": r.get("file_title"),
+            "title_path": r.get("title_path"),
+            "chunk_index": r.get("chunk_index"),
+            "content_preview": c[:max_chars] + ("…" if len(c) > max_chars else ""),
+            "char_count": len(c),
+        })
+    out.sort(key=lambda x: x.get("chunk_index", 0))
+    return out
 
 
 def stats() -> Dict[str, int]:

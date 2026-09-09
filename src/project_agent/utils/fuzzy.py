@@ -1,9 +1,11 @@
 """
-纯 Python 实现 Levenshtein 编辑距离（动态规划 + 缓存 + 同义词加权）
-设计亮点：
-- 我没直接用 python-Levenshtein C 扩展，手写 DP 版避免部署时缺编译环境
-- 同义词做加权：命中同义词时相似度 +0.1 加分，覆盖"库存/存货/stock"这类业务词
-- 相似度 = 1 - dist/max_len，阈值 0.6 以下直接丢弃，避免误召回
+编辑距离模糊匹配（工具层召回补充）
+
+【技能点】
+  ✅ 非向量相似度补充：Levenshtein + 同义词加权（库存/存货/stock 等）
+  ✅ 被 fuzzy_match_resource 与检索图 q_n4/q_n5 RRF 融合使用
+
+与 Embedding 余弦相似度互补：编码不准时靠字符串相似兜底。
 """
 from __future__ import annotations
 

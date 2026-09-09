@@ -1,9 +1,14 @@
 """
-RAG 知识库 RAG 知识库 Agent 的 3 个业务工具（严格对应设计文档里写的函数名）
-设计说明：
-- 我在 LangGraph 里用 `create_react_agent` + `bind_tools` / ToolNode 让模型自动决定要不要调工具。
-- 入参 schema 用 Pydantic 显式定义，模型 Function Calling 时错参率比裸描述下降约 70%。
-- 工具层是纯函数 + @tool 装饰器，单测能直接 import 跑，脱离 Agent 框架也能独立用。
+RAG Agent 业务工具（Function Calling）
+
+【技能点 · Function-Call / Agent 循环】
+  ✅ @tool + Pydantic args_schema：供 N7 按 JSON tool_call 调用
+  ✅ 工具：query_resource_by_code / fuzzy_match_resource / export_to_excel /
+           query_approved_projects（已审批立项，读业务库）
+  ✅ 与 rag_kb.nodes.q_n7_answer_with_tools 组成「思考→选工具→行动→再答」循环（≤3 轮）
+  📘 生产替换：将 _ASSET_DB/_HR_DB/_FIN_DB 换成 MySQL/MyBatis 或 Java 微服务 HTTP
+
+本层为纯函数，可脱离 Agent 单测。
 """
 from __future__ import annotations
 
@@ -359,8 +364,87 @@ def export_to_excel(rows: List[dict], filename: str = "export") -> dict:
     return res
 
 
+# =====================================================================
+# 工具 4：query_approved_projects（已审批立项，读业务真相源）
+# =====================================================================
+class QueryApprovedProjectsArgs(BaseModel):
+    keyword: str = Field(
+        "",
+        max_length=128,
+        description="可选关键词，匹配项目名称/编号/负责人/部门；空则返回最近审批通过的项目。",
+    )
+    limit: int = Field(5, ge=1, le=20, description="返回条数，默认 5。")
+
+
+@tool(args_schema=QueryApprovedProjectsArgs)
+def query_approved_projects(keyword: str = "", limit: int = 5) -> dict:
+    """
+    【已审批立项查询】当用户问「最新审批通过的项目」「已立项有哪些」「某负责人/部门的项目」时使用。
+    直接读取项目管理库中 status=approved 的记录（按审批/更新时间倒序），不是向量库模糊搜。
+    返回：{total, keyword, projects:[{id, project_code, project_name, owner, department, budget, ...}]}
+    """
+    from project_agent.projects import get_store
+
+    logger.info(f"[Tool.query_approved_projects] keyword={keyword!r} limit={limit}")
+    t0 = time.perf_counter()
+    items = get_store().list(status="approved")
+    kw = (keyword or "").strip().lower()
+    if kw:
+        def _hit(p) -> bool:
+            blob = " ".join([
+                p.project_code or "",
+                p.project_name or "",
+                p.owner or "",
+                p.department or "",
+                p.sponsor or "",
+                p.members or "",
+                p.description or "",
+            ]).lower()
+            return kw in blob
+        items = [p for p in items if _hit(p)]
+    # list() 已按 updated_at 倒序；再按 reviewed_at 优先
+    items = sorted(
+        items,
+        key=lambda p: p.reviewed_at or p.updated_at or p.created_at,
+        reverse=True,
+    )[: max(1, limit)]
+    projects = []
+    for p in items:
+        projects.append({
+            "id": p.id,
+            "project_code": p.project_code,
+            "project_name": p.project_name,
+            "project_type": p.project_type,
+            "owner": p.owner,
+            "department": p.department,
+            "budget": p.budget,
+            "priority": p.priority,
+            "risk_level": p.risk_level,
+            "start_date": p.start_date,
+            "end_date": p.end_date,
+            "reviewed_at": p.reviewed_at,
+            "reviewer": p.reviewer,
+            "description": (p.description or "")[:200],
+            "rag_item_pk": p.rag_item_pk or "",
+        })
+    res = {
+        "total": len(projects),
+        "keyword": keyword,
+        "projects": projects,
+        "cost_ms": int((time.perf_counter() - t0) * 1000),
+        "note": "数据来自立项审批库（已通过）；细节语义问答可再结合知识库检索。",
+    }
+    logger.info(f"[Tool.query_approved_projects] done total={res['total']} cost={res['cost_ms']}ms")
+    return res
+
+
 # 导出给上层使用
-RAG_TOOLS = [query_resource_by_code, fuzzy_match_resource, export_to_excel]
+RAG_TOOLS = [
+    query_resource_by_code,
+    fuzzy_match_resource,
+    export_to_excel,
+    query_approved_projects,
+]
 RAG_TOOLS_BY_NAME = {t.name: t for t in RAG_TOOLS}
 
 __all__ = [
@@ -369,6 +453,7 @@ __all__ = [
     "query_resource_by_code",
     "fuzzy_match_resource",
     "export_to_excel",
+    "query_approved_projects",
     "_ASSET_DB",
     "_HR_DB",
     "_FIN_DB",

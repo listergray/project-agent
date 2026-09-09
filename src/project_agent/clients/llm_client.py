@@ -1,9 +1,16 @@
 """
-LLM 客户端统一封装（LangChain ChatOpenAI 兼容协议，支持 DeepSeek / Qwen / 通义 / 硅基流动）
-设计说明：
-1. 用单例缓存 ChatOpenAI 实例，避免每个节点重复构造 + 重复加载连接池
-2. 统一超时 + 指数退避重试 2 次 + Token 消耗日志
-3. 非流式 / 流式接口统一封装，上层业务不用区分底层模型差异
+LLM 客户端统一封装（OpenAI 兼容协议）
+
+【技能点 · LLM 工程化 / 模型接入】
+  ✅ 兼容接口：langchain_openai.ChatOpenAI + base_url/api_key/model
+     可切换 DeepSeek / 通义千问 / 硅基流动等（改 conf/.env 即可）
+  ✅ 超时：settings.llm_timeout；重试：async_achain 指数退避（默认 2 次）
+  ✅ 流式：astream；非流式：achain / async_achain；json_mode 约束结构化输出
+  ✅ 会话记忆 / 消息窗口裁剪：utils.session_memory（run_search / N7 接入）
+  ✅ LangSmith：core.tracing.configure_langsmith（LANGSMITH_* / LANGCHAIN_*）
+  ✅ 节点内 LCEL：clients.lcel（多查询 / 忠实度等短链）
+
+单例缓存 ChatOpenAI，避免每个 LangGraph 节点重复建连。
 """
 from __future__ import annotations
 
@@ -15,11 +22,12 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from langchain_openai import ChatOpenAI
 from loguru import logger
 
-from project_agent.core import get_settings, get_trace_id
+from project_agent.core import configure_langsmith, get_settings, get_trace_id
 
 
 @lru_cache(maxsize=1)
 def _get_llm() -> ChatOpenAI:
+    configure_langsmith()
     settings = get_settings()
     return ChatOpenAI(
         base_url=settings.llm_base_url,

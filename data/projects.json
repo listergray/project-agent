@@ -1,0 +1,148 @@
+[
+  {
+    "project_code": "T-1",
+    "project_name": "测试立项",
+    "project_type": "研发",
+    "owner": "张三",
+    "department": "",
+    "sponsor": "",
+    "start_date": "",
+    "end_date": "",
+    "budget": 1000.0,
+    "priority": "P1",
+    "risk_level": "中",
+    "members": "",
+    "description": "",
+    "goals": "",
+    "source_file": "",
+    "remark": "",
+    "id": "prj_305dcfbcf4bb",
+    "status": "approved",
+    "created_at": "2026-09-05 18:54:02",
+    "updated_at": "2026-09-05 18:54:02",
+    "submitted_at": "2026-09-05 18:54:02",
+    "reviewed_at": "2026-09-05 18:54:02",
+    "reviewer": "李四",
+    "review_comment": "同意",
+    "created_by": "申请人",
+    "parse_confidence": null,
+    "history": [
+      {
+        "at": "2026-09-05 18:54:02",
+        "action": "created",
+        "by": "申请人",
+        "note": "创建立项草稿"
+      },
+      {
+        "at": "2026-09-05 18:54:02",
+        "action": "submitted",
+        "by": "申请人",
+        "note": "提交审批"
+      },
+      {
+        "at": "2026-09-05 18:54:02",
+        "action": "approved",
+        "by": "李四",
+        "note": "同意"
+      }
+    ]
+  },
+  {
+    "project_code": "",
+    "project_name": "基于Vite+React+TypeScript的轻量化SPA单页应用系统建设项目",
+    "project_type": "研发",
+    "owner": "",
+    "department": "",
+    "sponsor": "",
+    "start_date": "",
+    "end_date": "",
+    "budget": 0.0,
+    "priority": "P1",
+    "risk_level": "低",
+    "members": "",
+    "description": "本项目旨在搭建一套轻量化、高性能、规范化的现代化前端应用体系，采用Vite构建工具、React组件框架搭配TypeScript静态类型体系，解决传统前端开发模式中打包速度慢、热更新滞后、代码冗余度高、类型不严谨等问题。项目完成后将大幅提升页面加载速度、优化用户交互体验，降低后续开发维护成本，统一团队前端开发标准。",
+    "goals": "搭建Vite基础构建环境，替代传统Webpack低效打包模式；基于React函数式组件完成业务页面开发；通过TypeScript实现代码静态类型校验，减少线上隐性BUG；完善路由管理、状态管理、全局样式、接口封装等基础工程能力。",
+    "source_file": "Vite+React+TypeScript SPA项目 申报书+初验报告+终验报告 (1).pdf",
+    "remark": "文档包含申报书、初验报告和终验报告，项目已通过终验。",
+    "id": "prj_2f40c8610652",
+    "status": "approved",
+    "created_at": "2026-09-05 20:09:11",
+    "updated_at": "2026-09-05 20:45:52",
+    "submitted_at": "2026-09-05 20:09:35",
+    "reviewed_at": "2026-09-05 20:10:01",
+    "reviewer": "审批人",
+    "review_comment": "审批通过，信息正确",
+    "created_by": "申请人",
+    "parse_confidence": null,
+    "history": [
+      {
+        "at": "2026-09-05 20:09:11",
+        "action": "created",
+        "by": "申请人",
+        "note": "创建立项草稿"
+      },
+      {
+        "at": "2026-09-05 20:09:34",
+        "action": "updated",
+        "by": "申请人",
+        "note": "确认/修改表单"
+      },
+      {
+        "at": "2026-09-05 20:09:35",
+        "action": "submitted",
+        "by": "申请人",
+        "note": "提交审批"
+      },
+      {
+        "at": "2026-09-05 20:10:01",
+        "action": "approved",
+        "by": "审批人",
+        "note": "审批通过，信息正确"
+      },
+      {
+        "at": "2026-09-05 20:45:52",
+        "action": "rag_synced",
+        "by": "system",
+        "note": "同步知识库 pk=2f383d3207135cfd"
+      }
+    ],
+    "rag_item_pk": "2f383d3207135cfd"
+  },
+  {
+    "project_code": "项目编号001",
+    "project_name": "项目名称001",
+    "project_type": "研发",
+    "owner": "gyl",
+    "department": "",
+    "sponsor": "",
+    "start_date": "",
+    "end_date": "",
+    "budget": 0.0,
+    "priority": "P1",
+    "risk_level": "中",
+    "members": "",
+    "description": "项目概述001",
+    "goals": "",
+    "source_file": "",
+    "remark": "",
+    "id": "prj_b2b6fa41001f",
+    "status": "draft",
+    "created_at": "2026-09-06 13:27:42",
+    "updated_at": "2026-09-06 13:27:42",
+    "submitted_at": null,
+    "reviewed_at": null,
+    "reviewer": "",
+    "review_comment": "",
+    "created_by": "申请人",
+    "parse_confidence": null,
+    "rag_item_pk": null,
+    "history": [
+      {
+        "at": "2026-09-06 13:27:42",
+        "action": "created",
+        "by": "申请人",
+        "note": "创建立项草稿"
+      }
+    ]
+  }
+]
