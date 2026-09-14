@@ -3,11 +3,10 @@ __pycache__/
 *.pyc
 *.pyo
 .venv*/
-.venv\
 venv/
 dist/
 build/
-frontend/node_modules/
+**/node_modules/
 *.egg-info/
 .eggs/
 .pytest_cache/
@@ -25,20 +24,52 @@ Thumbs.db
 /data/logs/**
 !/data/logs/.gitkeep
 data/checkpoint.db
+data/checkpoints.sqlite
+data/checkpoints.sqlite-*
+data/sessions/
 
-# 导出结果
+# 导出结果 / 上传临时目录
 output/
 output/**
 .tmp_uploads/
 
+# 本地临时脚本与导出（含简历抽取）
+.tmp_*
+**/.tmp_*
+
+# 个人简历 / 隐私文档（勿提交）
+*简历*
+*resume*
+*Resume*
+郭云雷*
+
 # Milvus / MySQL / Redis 本地容器数据挂载（直接用 docker volume）
 docker/data/
 
-# 真实 .env 不进 Git
+# 基础设施备份 / 大包（含库 dump，勿提交）
+docker.zip
+docker/migrate/backup/
+*.tgz
+
+# 真实 .env 不进 Git（保留 .env.example / .env.demo）
+.env
+.env.local
+.env.*.local
 conf/.env
 
 # agent 工作记忆（私有跨会话日志，不进仓库）
 .workbuddy/
+.cursor/
+agent-transcripts/
 
 # 写权限测试残留（1 字节 "x" 文件夹验证残留）
 **/_wtest.txt
+
+# Java / 前端构建产物
+**/target/
+**/.umi/
+**/.umi-production/
+**/src/.umi/
+**/src/.umi-production/
+**/.mfsu-*/
+**/coverage/
