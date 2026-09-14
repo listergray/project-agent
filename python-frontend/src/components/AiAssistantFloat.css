@@ -1,0 +1,197 @@
+.ai-float {
+  position: relative;
+  z-index: 1200;
+}
+
+.ai-float-launcher {
+  position: fixed;
+  right: 18px;
+  bottom: 28%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 1210;
+}
+
+.ai-float-hint {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 10px 28px 10px 14px;
+  font-size: 13px;
+  color: #0f172a;
+  white-space: nowrap;
+  animation: ai-hint-in 0.28s ease;
+}
+
+.ai-float-hint::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-right: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.ai-float-hint-x {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.ai-float-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(0 10px 18px rgba(37, 99, 235, 0.35));
+  transition: transform 0.15s ease;
+}
+
+.ai-float-fab:hover {
+  transform: scale(1.06);
+}
+
+.ai-float-robot {
+  display: block;
+}
+
+.ai-float-mask {
+  display: none;
+}
+
+.ai-float-panel {
+  position: fixed;
+  top: 56px;
+  right: 16px;
+  bottom: 16px;
+  width: min(420px, calc(100vw - 24px));
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.18);
+  z-index: 1230;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: ai-panel-in 0.22s ease;
+}
+
+.ai-float-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafbfc;
+}
+
+.ai-float-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-float-tab {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  padding: 6px 10px;
+  border-radius: 8px 8px 0 0;
+}
+
+.ai-float-tab.on {
+  color: #1677ff;
+  background: #fff;
+  box-shadow: 0 1px 0 #fff;
+}
+
+.ai-float-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ai-float-icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.ai-float-icon-btn:hover {
+  border-color: #93c5fd;
+  color: #1d4ed8;
+}
+
+.ai-float-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-float-foot {
+  padding: 8px 14px 10px;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+  border-top: 1px solid #f1f5f9;
+}
+
+@keyframes ai-hint-in {
+  from {
+    opacity: 0;
+    transform: translateX(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes ai-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .ai-float-panel {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    border-radius: 0;
+  }
+
+  .ai-float-launcher {
+    right: 12px;
+    bottom: 18%;
+  }
+}

@@ -1,0 +1,123 @@
+openapi: 3.0.3
+info:
+  title: Project Agent · 项目库业务 API
+  description: |
+    由 Java（芋道模块）实现的基础业务接口。
+    Python AI 仅在配置 PROJECT_BIZ_BASE_URL 后转发 CRUD；
+    解析与 RAG 同步仍走 Python FastAPI。
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:48080
+    description: 芋道本地默认端口（按实际修改）
+paths:
+  /admin-api/project-agent/project/page:
+    get:
+      summary: 分页列表
+      parameters:
+        - in: query
+          name: status
+          schema: { type: string }
+        - in: query
+          name: pageNo
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: pageSize
+          schema: { type: integer, default: 20 }
+      responses:
+        "200":
+          description: 芋道 CommonResult 包装
+  /admin-api/project-agent/project/get:
+    get:
+      summary: 详情
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+  /admin-api/project-agent/project/create:
+    post:
+      summary: 创建草稿
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectSaveReqVO"
+      responses:
+        "200":
+          description: 返回 id
+  /admin-api/project-agent/project/update:
+    put:
+      summary: 更新草稿/驳回单
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectSaveReqVO"
+      responses:
+        "200":
+          description: OK
+  /admin-api/project-agent/project/submit:
+    post:
+      summary: 提交审批
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: OK
+  /admin-api/project-agent/project/review:
+    post:
+      summary: 审批通过或驳回
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectReviewReqVO"
+      responses:
+        "200":
+          description: OK
+  /admin-api/project-agent/project/stats:
+    get:
+      summary: 状态统计
+      responses:
+        "200":
+          description: OK
+components:
+  schemas:
+    ProjectSaveReqVO:
+      type: object
+      required: [projectName]
+      properties:
+        id: { type: string }
+        projectCode: { type: string }
+        projectName: { type: string }
+        projectType: { type: string }
+        owner: { type: string }
+        department: { type: string }
+        sponsor: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+        budget: { type: number }
+        priority: { type: string }
+        riskLevel: { type: string }
+        members: { type: string }
+        description: { type: string }
+        goals: { type: string }
+        sourceFile: { type: string }
+        remark: { type: string }
+    ProjectReviewReqVO:
+      type: object
+      required: [id, action]
+      properties:
+        id: { type: string }
+        action: { type: string, description: "approve | reject" }
+        reviewer: { type: string }
+        comment: { type: string }
