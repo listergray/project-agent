@@ -1,5 +1,8 @@
 # Project Agent · 中间件编排（Milvus + MinIO + MySQL + Redis）
 #
+# 客户端连接地址：在 conf/.env 设 INFRA_HOST=<本机局域网 IP>（默认 192.168.1.46）
+# 改 IP 只改 INFRA_HOST；Milvus/MinIO/MySQL/Redis 留空会自动跟它走。
+#
 # 预研项目选型（Windows 一台电脑直接跑）：
 #   · Milvus standalone_embed：单容器内嵌 SQLite + LocalStorage + 内嵌 etcd/MinIO，
 #     不要额外起 3 个依赖容器，资源占用比官方 compose 少 60%。
@@ -8,7 +11,7 @@
 #   · Redis 7-alpine：Redisson 锁 + 对话缓存。
 #   · MinIO：PDF/MD/Excel 文件存储（RAG 知识库 导入时选 MinIO 模式替代本地文件）。
 #
-# 启动（Windows PowerShell）：
+# 启动（在 INFRA_HOST 那台机器上）：
 #   cd docker
 #   docker compose up -d
 #   docker compose ps   # 看到 4 个 healthy ≈ 30~60s

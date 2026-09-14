@@ -8,18 +8,18 @@
 
 | 演示 | 路径 | 做什么 |
 | --- | --- | --- |
-| RAG 知识库 | `src/project_agent/rag_kb/` | LangGraph **7 导入 + 7 检索**；3 个 Function Calling 工具 |
-| 代码助手 编程提效 | `src/project_agent/copilot/` | LangGraph **5+1** 流水线，产出 Java/单测/接口文档 |
+| RAG 知识库 | `python/src/project_agent/rag_kb/` | LangGraph **7 导入 + 7 检索**；3 个 Function Calling 工具 |
+| 代码助手 编程提效 | `python/src/project_agent/copilot/` | LangGraph **5+1** 流水线，产出 Java/单测/接口文档 |
 
-统一 HTTP：`src/project_agent/api/server.py`（FastAPI，默认 `:8080`）。
+统一 HTTP：`python/src/project_agent/api/server.py`（FastAPI，默认 `:8080`）。
 
 ## 技术约束（改代码时遵守）
 
 - **语言**：Python 3.11–3.12（不要升到 3.13+，FlagEmbedding 兼容性未保证）
 - **编排**：LangGraph StateGraph；LLM 走 `langchain-openai`（DeepSeek 等 OpenAI 兼容，Key 在 `conf/.env`）
-- **主包**：只改 `src/project_agent/`。
-- **配置**：`pydantic-settings` → `src/project_agent/core/config.py`；密钥/连接串只进 `conf/.env`（参考 `conf/.env.example`）
-- **Prompt**：放 `prompts/*.txt`，用 `utils/prompt_loader` 加载，勿把长 Prompt 硬编码进节点
+- **主包**：只改 `python/src/project_agent/`。
+- **配置**：`pydantic-settings` → `python/src/project_agent/core/config.py`；密钥/连接串只进 `conf/.env`（参考 `conf/.env.example`）
+- **Prompt**：放 `python/prompts/*.txt`，用 `utils/prompt_loader` 加载，勿把长 Prompt 硬编码进节点
 - **中间件**：Milvus / MySQL / MinIO / Redis，由 `docker/` Compose 起；本地模型在 `data/models/`
 
 ## 目录导航
@@ -29,10 +29,14 @@ conf/                 .env / .env.example
 data/samples/         企业手册 MD（ASSET / HR / FIN）
 data/models/          BGE + Reranker 本地权重
 docker/               compose + mysql 初始化 + up.ps1
-prompts/              与节点对应的 Prompt 模板
+python/prompts/       与节点对应的 Prompt 模板
+python-frontend/      AI 门户 React（vue/ 对照）
+frontend/             业务管理前端（预留）
+java/                 业务后端
 output/               代码助手 生成物、rag-ui 展示页
-scripts/  tests/      脚本 / pytest 冒烟
-src/project_agent/
+scripts/              脚本
+python/tests/         pytest 冒烟
+python/src/project_agent/
   core/               config + logger
   clients/            llm / embed / milvus
   utils/              splitter / fuzzy / prompt_loader

@@ -11,7 +11,16 @@
 本仓库把上面两句话 **落地成可运行的代码**。照着「快速启动 3 条命令」执行一遍，
 就能看到「Milvus 向量库 + 7 节点检索 + 工具调用日志 + 生成的 Java 代码文件」完整跑通。
 
-**混合架构**：项目库等基础业务 → Java / 芋道（`java-biz/`）；RAG / 解析 / 代码助手等 AI → 本仓 Python。详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+**混合架构**：项目库等基础业务 → Java（`java/`）；RAG / 解析 / 代码助手等 AI → Python（`python/`）。详见 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)。
+
+### 在线演示
+
+| 地址 | 说明 |
+|------|------|
+| https://geime.fun/ | 主站（推荐） |
+| https://39.103.57.198/ | 备用（域名异常时） |
+
+> 演示依赖本机/服务器进程在线，偶发不可用时以本地启动为准。
 
 ---
 
@@ -90,7 +99,7 @@ flowchart LR
 | 缓存/锁 | **Redis 7 + Redisson** | "分布式锁防止重复导入 Excel（盘点导入并发场景）" |
 | 工具 | **3 @tool LangChain Function Calling** | 对外固定三个工具名：`query_resource_by_code` / `fuzzy_match_resource` / `export_to_excel` |
 | 算法 | **纯 Python Levenshtein DP + 同义词加权** | "编辑距离模糊匹配 + 同义词热加载" |
-| Prompt | **`prompts/*.txt` 独立管理** | "预研阶段跑通 Prompt 模板 + 向量检索 + Function Calling 链路" |
+| Prompt | **`python/prompts/*.txt` 独立管理** | "预研阶段跑通 Prompt 模板 + 向量检索 + Function Calling 链路" |
 | 部署 | **Docker Compose 单文件** | "Milvus + MinIO + MySQL + Redis 四个容器健康检查级联启动" |
 | 服务 | **FastAPI + SSE** | 演示 HTTP 接口（聊天/流式/导入/代码助手/健康） |
 | 测试 | **pytest + 5 条冒烟** | "Trae 生成文档 + 18 个单元测试（JUnit5 14 + pytest 5）" |
@@ -130,7 +139,7 @@ copilot-run         # 跑 代码助手 5+1 流水线 → output/copilot_XXX 生�
 ### 可选：启动 HTTP API 做浏览器演示
 ```powershell
 # 先构建 React 前端（首次需 npm install）
-cd frontend
+cd python-frontend
 npm install
 npm run build
 cd ..
@@ -147,7 +156,7 @@ agent-api          # 等价于 uvicorn project_agent.api.server:app --port 8080
 agent-api
 
 # 终端 2：Vite 开发服务器（/api 代理到 :8080）
-cd frontend
+cd python-frontend
 npm run dev
 # 打开 http://localhost:5173/
 ```
@@ -301,6 +310,10 @@ copilot-run                # 跑 5+1 节点（N1/N2/N3/N4/N5/N6），最后打�
 ## 📂 目录结构（一句话说明「代码怎么分层的」）
 ```
 project-agent/
+├── java/                     业务后端（RuoYi / project-agent / 演示 stub）
+├── frontend/                 业务管理前端（预留）
+├── python/                   AI 编排（src / prompts / tests）
+├── python-frontend/          AI 门户 React（vue/ 对照）
 ├── conf/                     .env + .env.example（不进 Git）
 ├── data/
 │   ├── samples/              3 份企业手册 MD（ASSET/HR/FIN）
@@ -309,14 +322,14 @@ project-agent/
 │   ├── docker-compose.yml    4 容器：Milvus standalone_embed + MinIO + MySQL 8 + Redis 7
 │   ├── mysql/init/01_*.sql   初始化建 7 张表 + Mock 数据
 │   └── up.ps1                Windows 一键启动脚本
-├── prompts/                  10 个 Prompt 模板 txt（可打开展示调优记录）
+├── python/prompts/           Prompt 模板 txt（可打开展示调优记录）
 │   ├── rag_import_n5_iteminfo.txt
 │   ├── rag_search_n1_rewrite.txt
 │   ├── rag_search_n7_answer.txt
 │   ├── copilot_n1_analyze.txt / n2_codgen / n4_testgen / n5_docgen.txt
 ├── scripts/                  (预留：批量评测脚本 / 一键生成复盘报告)
-├── tests/test_smoke_project_agent.py  5 条冒烟单测（10s 跑通，先跑这个验证环境）
-└── src/project_agent/
+├── python/tests/test_smoke_project_agent.py  冒烟单测
+└── python/src/project_agent/
     ├── core/                 config(pydantic-settings 单例) + logger(loguru+TraceID)
     ├── clients/              llm_client + embed_client(BGE/Rerank LRU) + milvus_client(双层索引)
     ├── utils/                text_splitter + fuzzy(Levenshtein DP+同义词) + prompt_loader
