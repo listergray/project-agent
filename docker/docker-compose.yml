@@ -1,6 +1,6 @@
 # Project Agent · 中间件编排（Milvus + MinIO + MySQL + Redis）
 #
-# 客户端连接地址：在 conf/.env 设 INFRA_HOST=<本机局域网 IP>（默认 192.168.1.46）
+# 客户端连接地址：在 conf/.env 设 INFRA_HOST=twlmac（本机 hosts 映射到基础设施机）
 # 改 IP 只改 INFRA_HOST；Milvus/MinIO/MySQL/Redis 留空会自动跟它走。
 #
 # 预研项目选型（Windows 一台电脑直接跑）：

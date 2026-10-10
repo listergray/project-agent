@@ -65,6 +65,11 @@ agent-transcripts/
 # 写权限测试残留（1 字节 "x" 文件夹验证残留）
 **/_wtest.txt
 
+# xianyu-auto 运行时数据与日志
+java/xianyu-auto/data/
+java/xianyu-auto/logs/
+java/xianyu-auto/.env
+
 # Java / 前端构建产物
 **/target/
 **/.umi/

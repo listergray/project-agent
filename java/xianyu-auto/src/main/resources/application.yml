@@ -1,0 +1,153 @@
+server:
+  port: ${SERVER_PORT:12400}
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: xianyu-auto
+  profiles:
+    active: dev
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+  # 加载 .env 文件
+  config:
+    import: optional:file:.env[.properties]
+  # MySQL 数据源（库名 xx_erp，连接信息见 .env）
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:53306}/${MYSQL_DB:xx_erp}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&allowMultiQueries=true
+    username: ${MYSQL_USER:root}
+    password: ${MYSQL_PASSWORD:}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-test-query: SELECT 1
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      continue-on-error: true
+      separator: ;
+  # 邮件
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          ssl:
+            enable: true
+          socketFactory:
+            class: javax.net.ssl.SSLSocketFactory
+  # Servlet 编码
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+# MyBatis-Plus
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    cache-enabled: false
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: AUTO
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:mapper/**/*.xml
+  type-aliases-package: com.xianyu.auto.**.entity
+
+# Sa-Token（本系统后台登录，与闲鱼 Cookie/WS 无关）
+# -1 = 永不过期；若要限时可改为秒数，如 2592000（30天）
+sa-token:
+  token-name: Authorization
+  timeout: -1
+  active-timeout: -1
+  is-concurrent: true
+  is-share: false
+  is-log: false
+  token-style: jwt
+  jwt-secret-key: ${SA_TOKEN_JWT_SECRET:xianyu-auto-default-jwt-secret-key-change-me-please-32chars}
+
+# 应用自定义配置
+xianyu:
+  # 加密密钥（AES-256，32 字节，部署时必须修改）
+  encrypt-key: ${ENCRYPT_KEY:j+a37Ld8nFWkx8TQHUIY8D5hk1UQpDl1QZ09JZofUbg=}
+  # 默认管理员密码（首次启动初始化用）
+  default-admin-password: ${DEFAULT_ADMIN_PASSWORD:admin123}
+  # 闲鱼集成
+  xianyu:
+    app-key: ${XIANYU_APP_KEY:34839810}
+    # 开放平台 OAuth2.0 配置（需在闲鱼开放平台申请）
+    open-app-key: ${XIANYU_OPEN_APP_KEY:}
+    open-app-secret: ${XIANYU_OPEN_APP_SECRET:}
+    oauth-callback-url: ${XIANYU_OAUTH_CALLBACK_URL:http://localhost:12400/api/oauth2/callback}
+    # Cookie 模式：仅离线账号做轻量保活（分钟，带抖动）；ONLINE 不打 HTTP
+    cookie-keepalive-min: ${XIANYU_COOKIE_KEEPALIVE_MIN:360}
+    mh5tk-refresh-min-hours: ${XIANYU_MH5TK_REFRESH_MIN_HOURS:6}
+    mh5tk-refresh-max-hours: ${XIANYU_MH5TK_REFRESH_MAX_HOURS:12}
+    # WS Token：优先按接口过期时间刷新；以下为无过期信息时的兜底
+    ws-token-refresh-min-hours: ${XIANYU_WS_TOKEN_REFRESH_MIN_HOURS:20}
+    ws-token-refresh-max-hours: ${XIANYU_WS_TOKEN_REFRESH_MAX_HOURS:22}
+    heartbeat-interval-sec: ${XIANYU_HEARTBEAT_INTERVAL_SEC:20}
+    heartbeat-timeout-sec: ${XIANYU_HEARTBEAT_TIMEOUT_SEC:30}
+  reply:
+    delay-min-sec: ${REPLY_DELAY_MIN_SEC:3}
+    delay-max-sec: ${REPLY_DELAY_MAX_SEC:7}
+  ai:
+    default-provider: ${AI_DEFAULT_PROVIDER:dashscope}
+    timeout-ms: ${AI_TIMEOUT_MS:30000}
+    retry-count: ${AI_RETRY_COUNT:2}
+    context-window: ${AI_CONTEXT_WINDOW:20}
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      model: ${OPENAI_MODEL:gpt-4o-mini}
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
+      model: ${DASHSCOPE_MODEL:qwen-plus}
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      model: ${DEEPSEEK_MODEL:deepseek-chat}
+  notify:
+    email-enabled: ${NOTIFY_EMAIL_ENABLED:false}
+    wecom-webhook-url: ${WECOM_WEBHOOK_URL:}
+    bark-key: ${BARK_KEY:}
+  playwright:
+    enabled: ${PLAYWRIGHT_ENABLED:false}
+    headless: ${PLAYWRIGHT_HEADLESS:true}
+    chromium-path: ${PLAYWRIGHT_CHROMIUM_PATH:}
+
+# CORS
+spring.web.cors:
+  allowed-origins: "*"
+  allowed-methods: "*"
+  allowed-headers: "*"
+  allow-credentials: false
+  max-age: 3600
+
+# 日志
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.xianyu.auto: DEBUG
+    com.baomidou: WARN
+    org.apache.ibatis: WARN
+  file:
+    name: ${LOG_PATH:./logs}/xianyu-auto.log
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 30
+      total-size-cap: 1GB

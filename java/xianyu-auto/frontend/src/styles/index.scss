@@ -1,0 +1,81 @@
+@use 'element-plus/theme-chalk/dark/css-vars.css';
+
+:root {
+  --app-header-height: 56px;
+  --app-sidebar-width: 220px;
+  --app-sidebar-collapsed-width: 64px;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--el-color-primary);
+  text-decoration: none;
+}
+
+// 自定义滚动条
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--el-border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+// 通用样式类
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.mb-8 {
+  margin-bottom: 8px;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+.mt-16 {
+  margin-top: 16px;
+}
+
+.page-container {
+  padding: 16px;
+  background-color: var(--el-bg-color-page);
+  min-height: calc(100vh - var(--app-header-height));
+}
+
+.card-shadow {
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+}
