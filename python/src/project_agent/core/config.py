@@ -41,8 +41,8 @@ class Settings(BaseSettings):
     # ---------- 局域网基础设施（Docker 宿主机）----------
     # 改 IP 只改这一项；Milvus / MinIO / MySQL / Redis 留空时自动继承
     infra_host: str = Field(
-        "192.168.1.46",
-        description="容器所在局域网宿主机；留空各 *_HOST 时用此值",
+        "twlmac",
+        description="容器所在局域网宿主机（hosts: twlmac）；留空各 *_HOST 时用此值",
     )
 
     # ---------- LLM ----------

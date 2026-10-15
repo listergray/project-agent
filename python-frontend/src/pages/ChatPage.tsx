@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
-import type { ChatResp } from '../types'
+import type { ChatResp, ProjectFields } from '../types'
+import {
+  buildParseSummary,
+  type ParseGapItem,
+} from '../lib/parseChatBridge'
 import './ChatPage.css'
 
 type Msg =
   | { role: 'user'; text: string }
-  | { role: 'bot'; data: ChatResp; streaming?: boolean }
+  | { role: 'bot'; data: ChatResp; streaming?: boolean; statusText?: string }
   | { role: 'typing'; text?: string }
   | {
       role: 'hitl'
@@ -14,10 +18,10 @@ type Msg =
       meta: Omit<ChatResp, 'answer'>
     }
   | {
-      role: 'hitl'
-      session_id: string
-      payload: Record<string, unknown>
-      meta: Omit<ChatResp, 'answer'>
+      role: 'parse_gap'
+      gaps: ParseGapItem[]
+      filename: string
+      done?: boolean
     }
 
 const QUICK = [
@@ -90,6 +94,9 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
   const taRef = useRef<HTMLTextAreaElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const sessionIdRef = useRef<string | undefined>(undefined)
+  const tokenQueueRef = useRef<string[]>([])
+  const drainingTokensRef = useRef(false)
+  const pendingDoneRef = useRef(false)
   const [rewriteDraft, setRewriteDraft] = useState('')
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyList, setHistoryList] = useState<HistoryItem[]>(() => loadHistory())
@@ -167,15 +174,147 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
   useEffect(() => {
     const onMsg = (ev: MessageEvent) => {
       const data = ev.data
-      if (!data || data.source !== 'pa-parse') return
-      if (data.type === 'pa-ai-new') resetSession()
-      if (data.type === 'pa-ai-history') setHistoryOpen((v) => !v)
+      if (!data || typeof data !== 'object') return
+      if (data.source === 'pa-parse') {
+        if (data.type === 'pa-ai-new') resetSession()
+        if (data.type === 'pa-ai-history') setHistoryOpen((v) => !v)
+        if (data.type === 'pa-parse-seed') void runParseSeed(data)
+      }
+      // 非若依壳：同页 float 直接收立项页消息
+      if (data.source === 'pa-projects' && data.type === 'pa-parse-to-chat') {
+        void runParseSeed(data)
+      }
     }
     window.addEventListener('message', onMsg)
     return () => window.removeEventListener('message', onMsg)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages, historyList])
+  }, [])
 
+  async function runParseSeed(data: Record<string, unknown>) {
+    if (sending) return
+    const filename = String(data.filename || '文档')
+    const gaps = Array.isArray(data.gaps) ? (data.gaps as ParseGapItem[]) : []
+    const fields = (data.fields || {}) as ProjectFields
+    const userText = `请解析文档「${filename}」并检查立项表单待补字段。`
+    const summary = buildParseSummary({
+      filename,
+      method: data.method ? String(data.method) : undefined,
+      confidence: typeof data.confidence === 'number' ? data.confidence : undefined,
+      fields,
+      gaps,
+    })
+
+    setErr('')
+    setHistoryOpen(false)
+    setSending(true)
+    tokenQueueRef.current = []
+    drainingTokensRef.current = false
+    pendingDoneRef.current = false
+
+    setMessages((m) => [
+      ...m,
+      { role: 'user', text: userText },
+      {
+        role: 'bot',
+        streaming: true,
+        data: {
+          session_id: sessionIdRef.current || '',
+          answer: '',
+          sources: [],
+          tool_calls: [],
+          intent: 'PARSE',
+          elapsed_ms: 0,
+        },
+      },
+    ])
+
+    // 本地流式打字（不走 RAG，避免把立项解析拐进知识库）
+    for (const ch of summary) {
+      tokenQueueRef.current.push(ch)
+    }
+    drainTokenQueue()
+
+    // 等打字队列排空后再挂缺口卡片
+    const waitDrain = () =>
+      new Promise<void>((resolve) => {
+        const tick = () => {
+          if (!drainingTokensRef.current && tokenQueueRef.current.length === 0) {
+            pendingDoneRef.current = true
+            finishStreamingIfReady()
+            resolve()
+            return
+          }
+          window.setTimeout(tick, 40)
+        }
+        tick()
+      })
+    await waitDrain()
+
+    if (gaps.length) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'parse_gap',
+          gaps: gaps.map((g) => ({ ...g, value: g.value || '' })),
+          filename,
+        },
+      ])
+    }
+    setSending(false)
+  }
+
+  function applyParseGaps(gaps: ParseGapItem[], msgIndex: number) {
+    const patch: Partial<ProjectFields> = {}
+    for (const g of gaps) {
+      const raw = (g.value || '').trim()
+      if (!raw) continue
+      if (g.kind === 'number') {
+        const n = Number(raw)
+        if (Number.isFinite(n)) (patch as Record<string, unknown>)[g.key] = n
+      } else {
+        (patch as Record<string, unknown>)[g.key] = raw
+      }
+    }
+    if (!Object.keys(patch).length) {
+      setErr('请至少填写一项待补字段')
+      return
+    }
+    try {
+      window.parent.postMessage(
+        { source: 'pa-chat', type: 'pa-fields-from-chat', fields: patch },
+        '*',
+      )
+    } catch {
+      /* ignore */
+    }
+    // 同页 float 场景：也广播给立项页（可能同 window）
+    try {
+      window.postMessage(
+        { source: 'pa-parse', type: 'pa-fields-patch', fields: patch },
+        '*',
+      )
+    } catch {
+      /* ignore */
+    }
+    setMessages((prev) =>
+      prev.map((m, i) => (i === msgIndex && m.role === 'parse_gap' ? { ...m, done: true } : m)),
+    )
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: 'bot',
+        streaming: false,
+        data: {
+          session_id: sessionIdRef.current || '',
+          answer: `已将 ${Object.keys(patch).length} 个字段写回立项表单，请在左侧核对后提交。`,
+          sources: [],
+          tool_calls: [],
+          intent: 'PARSE',
+          elapsed_ms: 0,
+        },
+      },
+    ])
+  }
 
   useEffect(() => {
     let healthTimer: number | undefined
@@ -221,6 +360,9 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
     setErr('')
     setQuery('')
     setSending(true)
+    tokenQueueRef.current = []
+    drainingTokensRef.current = false
+    pendingDoneRef.current = false
     abortRef.current?.abort()
     const ctrl = new AbortController()
     abortRef.current = ctrl
@@ -254,13 +396,90 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
     }
   }
 
+  function appendBotAnswer(piece: string) {
+    setMessages((prev) => {
+      const next = [...prev]
+      let last = next[next.length - 1]
+      if (last?.role === 'typing') {
+        next[next.length - 1] = {
+          role: 'bot',
+          streaming: true,
+          data: {
+            session_id: sessionIdRef.current || '',
+            answer: piece,
+            sources: [],
+            tool_calls: [],
+            intent: 'MIXED',
+            elapsed_ms: 0,
+          },
+        }
+        return next
+      }
+      if (last?.role === 'bot') {
+        next[next.length - 1] = {
+          ...last,
+          streaming: true,
+          statusText: undefined,
+          data: { ...last.data, answer: last.data.answer + piece },
+        }
+      }
+      return next
+    })
+  }
+
+  function finishStreamingIfReady() {
+    if (tokenQueueRef.current.length > 0 || drainingTokensRef.current) return
+    if (!pendingDoneRef.current) return
+    pendingDoneRef.current = false
+    setMessages((prev) => {
+      const next = [...prev]
+      const last = next[next.length - 1]
+      if (last?.role === 'bot') next[next.length - 1] = { ...last, streaming: false }
+      return next
+    })
+  }
+
+  function drainTokenQueue() {
+    if (drainingTokensRef.current) return
+    drainingTokensRef.current = true
+    const tick = () => {
+      const ch = tokenQueueRef.current.shift()
+      if (ch == null) {
+        drainingTokensRef.current = false
+        finishStreamingIfReady()
+        return
+      }
+      appendBotAnswer(ch)
+      window.setTimeout(tick, 16)
+    }
+    tick()
+  }
+
+  function enqueueToken(piece: string) {
+    if (!piece) return
+    // 小片直接追加；大块拆成逐字，避免「整段弹出」像非流式
+    if (piece.length <= 2) {
+      appendBotAnswer(piece)
+      return
+    }
+    for (const ch of piece) tokenQueueRef.current.push(ch)
+    drainTokenQueue()
+  }
+
   function streamHandlers(onGotMeta: () => void) {
     return {
       onStatus: (msg: string) => {
         setMessages((prev) => {
           const next = [...prev]
           const last = next[next.length - 1]
-          if (last?.role === 'typing') next[next.length - 1] = { role: 'typing', text: msg }
+          if (last?.role === 'typing') {
+            next[next.length - 1] = { role: 'typing', text: msg }
+            return next
+          }
+          // early meta 后 typing 已换成 bot：进度写到 statusText，避免只剩「正在生成」
+          if (last?.role === 'bot' && last.streaming) {
+            next[next.length - 1] = { ...last, statusText: msg }
+          }
           return next
         })
       },
@@ -268,51 +487,37 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
         onGotMeta()
         if (meta.session_id) sessionIdRef.current = meta.session_id
         setMessages((prev) => {
+          const typing = [...prev].reverse().find((x) => x.role === 'typing')
+          const statusFromTyping =
+            typing && typing.role === 'typing' && typing.text ? typing.text : undefined
           const next = prev.filter((x) => x.role !== 'typing')
           const last = next[next.length - 1]
           if (last?.role === 'bot' && last.streaming) {
             next[next.length - 1] = {
               ...last,
               streaming: true,
+              statusText: last.statusText || statusFromTyping,
               data: { ...last.data, ...meta, answer: last.data.answer },
             }
             return next
           }
-          next.push({ role: 'bot', streaming: true, data: { ...meta, answer: '' } })
+          next.push({
+            role: 'bot',
+            streaming: true,
+            statusText: statusFromTyping || '开始处理…',
+            data: { ...meta, answer: '' },
+          })
           return next
         })
       },
       onToken: (piece: string) => {
-        setMessages((prev) => {
-          const next = [...prev]
-          let last = next[next.length - 1]
-          if (last?.role === 'typing') {
-            next[next.length - 1] = {
-              role: 'bot',
-              streaming: true,
-              data: {
-                session_id: sessionIdRef.current || '',
-                answer: piece,
-                sources: [],
-                tool_calls: [],
-                intent: 'MIXED',
-                elapsed_ms: 0,
-              },
-            }
-            return next
-          }
-          if (last?.role === 'bot') {
-            next[next.length - 1] = {
-              ...last,
-              streaming: true,
-              data: { ...last.data, answer: last.data.answer + piece },
-            }
-          }
-          return next
-        })
+        enqueueToken(piece)
       },
       onInterrupted: (meta: Omit<ChatResp, 'answer'>) => {
         onGotMeta()
+        tokenQueueRef.current = []
+        drainingTokensRef.current = false
+        pendingDoneRef.current = false
         if (meta.session_id) sessionIdRef.current = meta.session_id
         setRewriteDraft(String(meta.interrupt_payload?.suggested_query || ''))
         setMessages((prev) => [
@@ -326,14 +531,13 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
         ])
       },
       onDone: () => {
-        setMessages((prev) => {
-          const next = [...prev]
-          const last = next[next.length - 1]
-          if (last?.role === 'bot') next[next.length - 1] = { ...last, streaming: false }
-          return next
-        })
+        pendingDoneRef.current = true
+        finishStreamingIfReady()
       },
       onError: (detail: string) => {
+        tokenQueueRef.current = []
+        drainingTokensRef.current = false
+        pendingDoneRef.current = false
         setMessages((prev) => prev.filter((x) => x.role !== 'typing'))
         setErr('请求失败：' + detail)
       },
@@ -484,10 +688,22 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
                 <div className={`msg bot${isPanel ? ' msg--panel' : ''}`} key={i}>
                   <div className="av">{isPanel ? <BotAvatar small /> : 'R'}</div>
                   <div className="bubble bubble--plain">
-                    {m.text && m.text !== '思考中…' && m.text !== '检索与推理中…' ? (
-                      <div className="bot-lead">{m.text}</div>
-                    ) : null}
-                    <GeneratingRow />
+                    <GeneratingRow label={m.text} />
+                  </div>
+                </div>
+              )
+            }
+            if (m.role === 'parse_gap') {
+              return (
+                <div className={`msg bot${isPanel ? ' msg--panel' : ''}`} key={i}>
+                  <div className="av">{isPanel ? <BotAvatar small /> : 'R'}</div>
+                  <div className={`bubble${isPanel ? ' bubble--plain' : ''}`}>
+                    <ParseGapCard
+                      gaps={m.gaps}
+                      done={!!m.done}
+                      disabled={sending}
+                      onApply={(next) => applyParseGaps(next, i)}
+                    />
                   </div>
                 </div>
               )
@@ -543,11 +759,17 @@ export function ChatPage({ variant = 'page', onSessionReset }: ChatPageProps) {
                   )}
                   <ToolCalls tcs={m.data.tool_calls} panel={isPanel} />
                   {!isPanel && <Sources srcs={m.data.sources} />}
+                  {/* 面板也走 SSE：有正文则边收边显；尚无 token 时显示进度文案 */}
+                  {m.streaming && isPanel && !(m.data.answer || '').trim() && (
+                    <GeneratingRow label={m.statusText} />
+                  )}
+                  {m.streaming && !isPanel && !(m.data.answer || '').trim() && m.statusText && (
+                    <div className="bot-lead">{m.statusText}</div>
+                  )}
                   <div className="bot-answer" style={{ marginTop: isPanel ? 0 : 10, whiteSpace: 'pre-wrap' }}>
                     {m.data.answer}
-                    {m.streaming && !isPanel && <span className="stream-caret" />}
+                    {m.streaming && !!(m.data.answer || '').trim() && <span className="stream-caret" />}
                   </div>
-                  {m.streaming && isPanel && <GeneratingRow />}
                   {isPanel && !m.streaming && m.data.answer && (
                     <div className="msg-actions">
                       <button type="button" title="有用" onClick={() => {}}>
@@ -713,15 +935,72 @@ function Sources({ srcs }: { srcs: string[] }) {
   )
 }
 
-function GeneratingRow() {
+function GeneratingRow({ label }: { label?: string }) {
+  const text =
+    label && label !== '思考中…' && label !== '检索与推理中…' ? label : '正在生成'
   return (
     <div className="gen-status" aria-live="polite">
-      正在生成
+      {text}
       <span className="gen-dots" aria-hidden>
         <i />
         <i />
         <i />
       </span>
+    </div>
+  )
+}
+
+function ParseGapCard({
+  gaps,
+  done,
+  disabled,
+  onApply,
+}: {
+  gaps: ParseGapItem[]
+  done: boolean
+  disabled?: boolean
+  onApply: (gaps: ParseGapItem[]) => void
+}) {
+  const [draft, setDraft] = useState<ParseGapItem[]>(() => gaps.map((g) => ({ ...g })))
+
+  useEffect(() => {
+    setDraft(gaps.map((g) => ({ ...g })))
+  }, [gaps])
+
+  if (done) {
+    return <div className="parse-gap-card parse-gap-card--done">待补字段已写回表单</div>
+  }
+
+  return (
+    <div className="parse-gap-card">
+      <div className="parse-gap-title">待补全字段</div>
+      <div className="parse-gap-list">
+        {draft.map((g, idx) => (
+          <label className="parse-gap-row" key={String(g.key)}>
+            <span>
+              {g.label}
+              {g.required ? <em>*</em> : null}
+            </span>
+            <input
+              value={g.value}
+              placeholder={g.kind === 'number' ? '请输入数字' : '请输入'}
+              disabled={disabled}
+              onChange={(e) => {
+                const v = e.target.value
+                setDraft((prev) => prev.map((x, i) => (i === idx ? { ...x, value: v } : x)))
+              }}
+            />
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="btn btn-primary parse-gap-btn"
+        disabled={disabled}
+        onClick={() => onApply(draft)}
+      >
+        填回立项表单
+      </button>
     </div>
   )
 }

@@ -1,0 +1,3 @@
+(2100, 0, '项目管理', 'project', None, 'M', '0', '0')
+(2101, 2100, '智能对话', 'chat', 'project/chat/index', 'C', '1', '1')
+(2102, 2100, '项目录入', 'parse', 'project/parse/index', 'C', '0', '0')

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Assistant System">
+  <defs>
+    <linearGradient id="as-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0b1f33"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+    <linearGradient id="as-a" x1="18" y1="12" x2="46" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
+    </linearGradient>
+  </defs>
+  <!-- full tile -->
+  <rect width="64" height="64" rx="14" fill="url(#as-bg)"/>
+  <!-- broad A — fills the field, generous stroke -->
+  <path fill="url(#as-a)" d="M32 11L50.5 53h-8.2l-3.4-8.2H24.1L20.7 53H12.5L32 11zm0 14.2l-5.1 12.4h10.2L32 25.2z"/>
+  <!-- single strong accent bar under crossbar -->
+  <rect x="22" y="34.8" width="20" height="3.6" rx="1.2" fill="#5eead4"/>
+</svg>

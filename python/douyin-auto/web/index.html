@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>抖音目录发视频</title>
+  <style>
+    :root {
+      --bg: #0f1419; --panel: #1a2332; --line: #2a3648; --text: #e7eef8;
+      --muted: #8b9bb4; --accent: #fe2c55; --ok: #3dd68c; --warn: #f5a524; --bad: #f31260;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #2a1830 0%, transparent 50%),
+                  radial-gradient(900px 500px at 100% 0%, #12263d 0%, transparent 45%), var(--bg);
+      color: var(--text); min-height: 100vh;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 28px 20px 60px; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    .sub { color: var(--muted); margin-bottom: 24px; }
+    .card {
+      background: #1a2332ee; border: 1px solid var(--line);
+      border-radius: 14px; padding: 18px; margin-bottom: 16px;
+    }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    label { color: var(--muted); font-size: 13px; min-width: 72px; }
+    input[type="text"] {
+      flex: 1; min-width: 260px; background: #0d121a; border: 1px solid var(--line);
+      color: var(--text); border-radius: 10px; padding: 10px 12px; outline: none;
+    }
+    button {
+      border: 0; border-radius: 10px; padding: 10px 14px; cursor: pointer;
+      font-weight: 600; color: white; background: #334155;
+    }
+    button.primary { background: linear-gradient(135deg, #fe2c55, #ff6a3d); }
+    button.ok { background: #178f5b; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--muted); }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: #243044; color: var(--muted); }
+    .tag.ok { background: #123526; color: var(--ok); }
+    .tag.bad { background: #3a1320; color: var(--bad); }
+    .tag.run { background: #3a2a10; color: var(--warn); }
+    .muted { color: var(--muted); font-size: 12px; }
+    .path { word-break: break-all; }
+    .toast {
+      position: fixed; right: 18px; bottom: 18px; background: #111827; border: 1px solid var(--line);
+      padding: 12px 14px; border-radius: 12px; max-width: 420px; display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>抖音目录发视频</h1>
+    <p class="sub">方案 B：Playwright 登录创作者中心，扫描目录 mp4 并一键发布。页面结构变更时可能需要调整选择器。</p>
+    <div class="card">
+      <div class="row" style="margin-bottom:12px">
+        <label>视频目录</label>
+        <input id="videoDir" type="text" placeholder=".../EP29_wechat_voice/video_html" />
+        <button class="primary" onclick="saveAndScan()">保存并扫描</button>
+        <button onclick="scanOnly()">仅扫描</button>
+      </div>
+      <div class="row">
+        <label>登录状态</label>
+        <span id="loginTag" class="tag">未知</span>
+        <button class="ok" onclick="doLogin()">扫码登录</button>
+        <button onclick="refreshLogin(true)">刷新状态</button>
+        <button onclick="doKeepAlive()">立即保活</button>
+        <label style="margin-left:12px"><input id="headless" type="checkbox" /> 无头模式（不推荐）</label>
+      </div>
+      <p class="muted" style="margin:8px 0 0" id="keepAliveInfo"></p>
+      <p class="muted" style="margin:8px 0 0">首次请点「扫码登录」，在弹出浏览器中登录抖音创作者中心；登录态保存在本地 profile；服务会定期访问创作者中心保活（45min）。</p>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;margin-bottom:10px">
+        <div><strong>视频列表</strong> <span id="scanInfo" class="muted"></span></div>
+        <button onclick="loadJobs()">刷新任务</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style="width:28%">文件</th>
+            <th style="width:18%">标题</th>
+            <th style="width:18%">封面</th>
+            <th style="width:12%">大小</th>
+            <th style="width:24%">操作</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="card">
+      <strong>最近任务</strong>
+      <table style="margin-top:10px">
+        <thead>
+          <tr><th>ID</th><th>标题</th><th>状态</th><th>消息</th><th>时间</th></tr>
+        </thead>
+        <tbody id="jobs"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="toast" class="toast"></div>
+  <script>
+    const NONE_LABEL = '无';
+    const PUB_LABEL = '发布到抖音';
+    const $ = (id) => document.getElementById(id);
+    function toast(msg) {
+      const el = $('toast'); el.textContent = msg; el.style.display = 'block';
+      setTimeout(() => el.style.display = 'none', 3200);
+    }
+    function fmtSize(n) {
+      if (n < 1024) return n + ' B';
+      if (n < 1024*1024) return (n/1024).toFixed(1) + ' KB';
+      return (n/1024/1024).toFixed(1) + ' MB';
+    }
+    async function api(url, opts = {}) {
+      const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || data.message || res.statusText);
+      return data;
+    }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    async function loadSettings() {
+      const s = await api('/api/settings');
+      $('videoDir').value = s.videoDir || '';
+      $('headless').checked = !!s.headless;
+    }
+    async function saveSettings() {
+      await api('/api/settings', {
+        method: 'PUT',
+        body: JSON.stringify({ videoDir: $('videoDir').value.trim(), headless: $('headless').checked }),
+      });
+    }
+    async function saveAndScan() { await saveSettings(); await scanOnly(); toast('OK'); }
+    async function scanOnly() {
+      const directory = $('videoDir').value.trim();
+      const data = await api('/api/scan', { method: 'POST', body: JSON.stringify({ directory }) });
+      $('scanInfo').textContent = data.directory + ' | ' + data.total;
+      const tb = $('tbody'); tb.innerHTML = '';
+      for (const it of data.list) {
+        const tr = document.createElement('tr');
+        const coverV = it.coverPathV ? it.coverPathV.split(/[/\\]/).pop() : '';
+        const coverH = it.coverPathH ? it.coverPathH.split(/[/\\]/).pop() : '';
+        const coverName = (coverV || coverH)
+          ? ('竖:' + (coverV || '-') + ' / 横:' + (coverH || '-'))
+          : (it.coverPath ? it.coverPath.split(/[/\\]/).pop() : NONE_LABEL);
+        tr.innerHTML = `
+          <td><div>${escapeHtml(it.name)}</div><div class="muted path">${escapeHtml(it.path)}</div></td>
+          <td><input class="title-input" type="text" style="min-width:140px;width:100%" /></td>
+          <td class="muted">${escapeHtml(coverName)}</td>
+          <td>${fmtSize(it.size)}</td>
+          <td><button class="primary pub-btn">${PUB_LABEL}</button></td>`;
+        tr.querySelector('.title-input').value = it.title || '';
+        tr.querySelector('.pub-btn').addEventListener('click', () => {
+          publishOne(it.path, tr.querySelector('.title-input').value.trim());
+        });
+        tb.appendChild(tr);
+      }
+    }
+    async function publishOne(videoPath, title) {
+      try {
+        // Server resolves 竖3:4 / 横4:3 covers + #ai编程 #干货 + 北京市朝阳区
+        const data = await api('/api/publish', {
+          method: 'POST',
+          body: JSON.stringify({ videoPath, title: title || undefined }),
+        });
+        toast('job ' + data.jobId);
+        loadJobs(); pollJob(data.jobId);
+      } catch (e) { toast(String(e.message || e)); }
+    }
+    async function pollJob(id) {
+      for (let i = 0; i < 120; i++) {
+        await sleep(2000);
+        try {
+          const j = await api('/api/jobs/' + id);
+          loadJobs();
+          if (j.status === 'SUCCESS' || j.status === 'FAILED') { toast(j.status + ': ' + (j.message || '')); return; }
+        } catch (_) {}
+      }
+    }
+    async function loadJobs() {
+      const data = await api('/api/jobs');
+      const tb = $('jobs'); tb.innerHTML = '';
+      for (const j of data.list) {
+        const cls = j.status === 'SUCCESS' ? 'ok' : j.status === 'FAILED' ? 'bad' : 'run';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${j.id}</td><td>${escapeHtml(j.title || '')}</td>
+          <td><span class="tag ${cls}">${j.status}</span></td>
+          <td class="muted">${escapeHtml(j.message || '')}</td>
+          <td class="muted">${j.updatedAt ? new Date(j.updatedAt).toLocaleString() : '-'}</td>`;
+        tb.appendChild(tr);
+      }
+    }
+    function renderKeepAlive(ka) {
+      const el = $('keepAliveInfo');
+      if (!el || !ka) return;
+      const last = ka.lastAt ? new Date(ka.lastAt).toLocaleString() : '-';
+      const next = ka.nextAt ? new Date(ka.nextAt).toLocaleString() : '-';
+      const st = ka.lastOk === true ? '有效' : (ka.lastOk === false ? '失效/未登录' : '尚未检测');
+      const jitter = ka.jitterMin != null ? `±${ka.jitterMin}` : '';
+      const delay = ka.lastDelayMin != null ? ` | 本次间隔: ${ka.lastDelayMin}min` : '';
+      el.textContent = `保活: ${ka.enabled ? '开' : '关'} / ${ka.intervalMin || '-'}${jitter}min${delay} | 上次: ${last} (${st}) | 下次: ${next} | ${ka.lastMessage || ''}`;
+    }
+    async function doKeepAlive() {
+      toast('正在保活...');
+      try {
+        const r = await api('/api/login/keepalive', { method: 'POST' });
+        renderKeepAlive(r);
+        toast(r.lastMessage || (r.lastOk ? 'OK' : 'NO'));
+        const tag = $('loginTag');
+        tag.textContent = r.lastMessage || (r.lastOk ? 'OK' : 'NO');
+        tag.className = 'tag ' + (r.lastOk ? 'ok' : 'bad');
+      } catch (e) { toast(String(e.message || e)); }
+    }
+    async function doLogin() {
+      toast('等待浏览器空闲并打开扫码...');
+      try {
+        const r = await api('/api/login', { method: 'POST' });
+        toast(r.message || '');
+        if (r.keepAlive) renderKeepAlive(r.keepAlive);
+        if (r.ok) {
+          const tag = $('loginTag');
+          tag.textContent = r.message || 'OK';
+          tag.className = 'tag ok';
+        } else {
+          refreshLogin();
+        }
+      } catch (e) { toast(String(e.message || e)); }
+    }
+    let loginBusy = false;
+    async function refreshLogin(force) {
+      if (loginBusy) return;
+      loginBusy = true;
+      const tag = $('loginTag');
+      tag.textContent = '...';
+      tag.className = 'tag run';
+      try {
+        const q = force ? '?force=1' : '?soft=1';
+        const r = await api('/api/login/status' + q);
+        const suffix = r.fromDisk ? '(缓存)' : (r.cached ? '(内存)' : '');
+        tag.textContent = (r.message || (r.ok ? 'OK' : 'NO')) + suffix;
+        tag.className = 'tag ' + (r.ok ? 'ok' : 'bad');
+        if (r.keepAlive) renderKeepAlive(r.keepAlive);
+      } catch (e) {
+        tag.textContent = String(e.message || e).slice(0, 24) || 'ERR';
+        tag.className = 'tag bad';
+      } finally {
+        loginBusy = false;
+      }
+    }
+    (async () => {
+      await loadSettings(); await loadJobs();
+      if ($('videoDir').value.trim()) { try { await scanOnly(); } catch (e) { toast(e.message); } }
+      try {
+        const s = await api('/api/settings');
+        if (s.keepAlive) renderKeepAlive(s.keepAlive);
+      } catch (_) {}
+      // After restart: soft status from disk cache (browser profile also persists).
+      try { await refreshLogin(false); } catch (_) {
+        $('loginTag').textContent = '点刷新检测';
+        $('loginTag').className = 'tag';
+      }
+    })();
+  </script>
+</body>
+</html>

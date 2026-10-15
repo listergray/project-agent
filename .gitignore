@@ -7,6 +7,7 @@ venv/
 dist/
 build/
 **/node_modules/
+**/node_modules_old*/
 *.egg-info/
 .eggs/
 .pytest_cache/
@@ -69,6 +70,24 @@ agent-transcripts/
 java/xianyu-auto/data/
 java/xianyu-auto/logs/
 java/xianyu-auto/.env
+
+# douyin-auto 运行时 / 浏览器登录态
+python/douyin-auto/.env
+python/douyin-auto/data/
+python/douyin-auto/.venv/
+
+# myhome（web/myhome）本地密钥与构建
+web/myhome/server/.env
+web/myhome/dist/
+
+# 若依本地运行日志目录（~ 展开残留）
+java/ruoyi-react/~/
+# 若依原独立仓库的 .git 备份（并入 monorepo 后不再作为嵌套仓库）
+java/ruoyi-react/.git.nested.bak/
+
+# 视频剪辑预览帧 / 临时素材（体积大，不进仓库）
+img/_preview_frames/
+img/*.mp4
 
 # Java / 前端构建产物
 **/target/

@@ -14,8 +14,11 @@ Do not start local Docker DB; use twlmac like the rest of project_agent.
 
 ## Start
 
+> 已纳入仓库启动清单：`.cursor/rules/local-services.mdc`（「启动服务」时与 core stack 一并检查 `:12400`）。
+
 ```powershell
 cd E:\\ai-pro\\project_agent\\java\\xianyu-auto
+# 需已有 frontend/dist，并在 target/classes/static（package 会自动拷贝）
 mvn spring-boot:run "-Dfrontend.phase=none"
 ```
 
@@ -27,6 +30,7 @@ java -jar target/xianyu-auto-1.0.0-SNAPSHOT.jar
 ```
 
 First boot creates `xx_erp` and runs `schema.sql`.
+健康检查：`http://127.0.0.1:12400/api/public/health`；若依菜单：`http://localhost:8000/subsystem/xianyu`。
 
 ## RuoYi entry
 

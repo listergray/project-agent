@@ -900,3 +900,67 @@ body.chat-embed-panel-body .chat-page {
   height: 100vh;
 }
 
+.parse-gap-card {
+  margin-top: 4px;
+  padding: 12px 12px 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.parse-gap-card--done {
+  color: #64748b;
+  font-size: 13px;
+  border-style: dashed;
+}
+
+.parse-gap-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 10px;
+}
+
+.parse-gap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.parse-gap-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.parse-gap-row em {
+  color: #ef4444;
+  font-style: normal;
+  margin-left: 2px;
+}
+
+.parse-gap-row input {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  outline: none;
+  background: #fff;
+}
+
+.parse-gap-row input:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.parse-gap-btn {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.chat-page--panel .parse-gap-card {
+  background: #fff;
+}
+

@@ -5,5 +5,7 @@ from .rag_tools import (  # noqa: F401
     fuzzy_match_resource,
     export_to_excel,
     query_approved_projects,
+    query_project_todos,
+    query_project_stats,
 )
 from .init_infra import main as init_infra_main  # noqa: F401

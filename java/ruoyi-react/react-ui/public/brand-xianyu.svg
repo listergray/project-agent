@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Xianyu Auto">
+  <defs>
+    <linearGradient id="xy-bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ea580c"/>
+      <stop offset="1" stop-color="#c2410c"/>
+    </linearGradient>
+    <linearGradient id="xy-body" x1="14" y1="20" x2="52" y2="46" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff7ed"/>
+      <stop offset="1" stop-color="#ffedd5"/>
+    </linearGradient>
+  </defs>
+  <!-- app tile -->
+  <rect width="64" height="64" rx="14" fill="url(#xy-bg)"/>
+  <!-- stylized fish (marketplace mark) -->
+  <path fill="url(#xy-body)" d="M12.5 33.5c6.8-9.2 16.2-13.8 26.2-12.2 4.2.7 8 2.6 11.2 5.4l5.6-3.2c1.1-.6 2.3.5 1.8 1.6l-2.6 5.8 2.8 2.2c.9.7.4 2.1-.7 2.2l-6.2.4c-3.4 4.2-8.2 7-13.6 7.8-9.4 1.4-18.2-2.2-24.5-10z"/>
+  <!-- eye -->
+  <circle cx="24.5" cy="31.2" r="2.4" fill="#9a3412"/>
+  <circle cx="25.2" cy="30.5" r="0.8" fill="#fff7ed"/>
+  <!-- fin accent -->
+  <path fill="#fdba74" d="M34 22.5c2.8 1.2 4.6 3.4 5.2 6.2-3.2-1-5.8-2.8-7.6-5.4.8-.4 1.6-.6 2.4-.8z"/>
+  <!-- auto / lightning delivery badge -->
+  <circle cx="46.5" cy="46.5" r="9.2" fill="#fff7ed"/>
+  <path fill="#ea580c" d="M48.8 41.2l-6.2 7.2h3.2l-1.4 5.4 6.6-7.6h-3.4l1.2-5z"/>
+</svg>

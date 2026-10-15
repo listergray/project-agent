@@ -364,12 +364,27 @@ def iter_search_events(user_query: str, *, session_id: str | None = None):
             if mode == "updates" and isinstance(chunk, dict):
                 for node_name, upd in chunk.items():
                     msg = _NODE_STATUS_MSG.get(node_name, f"执行 {node_name}…")
+                    # Self-RAG 路由结果写进进度，避免误以为「只跑了改写、没跑 Self-RAG」
+                    if node_name == "q_n1a_self_rag_route" and isinstance(upd, dict):
+                        need = upd.get("need_rag")
+                        reason = str(upd.get("self_rag_route_reason") or "").strip()
+                        if need is False:
+                            msg = "Self-RAG 路由：跳过向量检索" + (f" · {reason[:48]}" if reason else "")
+                        elif need is True:
+                            msg = "Self-RAG 路由：需要知识库检索" + (f" · {reason[:48]}" if reason else "")
                     yield {"event": "status", "stage": node_name, "message": msg, "session_id": sid}
                     if isinstance(upd, dict):
                         result.update(upd)
             elif mode == "custom" and isinstance(chunk, dict):
                 if chunk.get("type") == "token" and chunk.get("text"):
                     yield {"event": "token", "text": str(chunk["text"]), "session_id": sid}
+                elif chunk.get("type") == "status":
+                    yield {
+                        "event": "status",
+                        "stage": chunk.get("stage") or "custom",
+                        "message": chunk.get("message") or "处理中…",
+                        "session_id": sid,
+                    }
     except GraphInterrupt as e:
         payload = _interrupt_payload_from_exc(e)
         snap = graph.get_state(config)

@@ -1,0 +1,27 @@
+import { Dropdown } from 'antd';
+import type { DropDownProps } from 'antd';
+import React from 'react';
+import { createStyles } from 'antd-style';
+import clsx from 'clsx';
+
+const useStyles = createStyles(({ token }) => {
+  return {
+    dropdown: {
+      [`@media screen and (max-width: ${token.screenXS}px)`]: {
+        width: '100%',
+      },
+    },
+  };
+});
+
+export type HeaderDropdownProps = {
+  rootClassName?: string;
+  placement?: 'bottomLeft' | 'bottomRight' | 'topLeft' | 'topCenter' | 'topRight' | 'bottomCenter';
+} & Omit<DropDownProps, 'overlay'>;
+
+const HeaderDropdown: React.FC<HeaderDropdownProps> = ({ rootClassName: cls, ...restProps }) => {
+  const { styles } = useStyles();
+  return <Dropdown classNames={{ root: clsx(styles.dropdown, cls) }} {...restProps} />;
+};
+
+export default HeaderDropdown;

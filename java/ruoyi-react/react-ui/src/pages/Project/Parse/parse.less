@@ -1,0 +1,125 @@
+.pa-parse-page {
+  position: relative;
+  min-height: 480px;
+}
+
+.pa-parse-page--ai .pa-parse-main {
+  margin-right: min(440px, 42vw) !important;
+  transition: margin-right 0.2s ease;
+}
+
+.pa-ai-launcher {
+  position: fixed;
+  right: 20px;
+  bottom: 28%;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pa-ai-hint {
+  position: relative;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
+  padding: 10px 28px 10px 14px;
+  font-size: 13px;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.pa-ai-hint::after {
+  content: '';
+  position: absolute;
+  right: -6px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-right: 1px solid #e2e8f0;
+  border-top: 1px solid #e2e8f0;
+  transform: translateY(-50%) rotate(45deg);
+}
+
+.pa-ai-hint-x {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.pa-ai-fab {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(0 10px 18px rgba(37, 99, 235, 0.35));
+  transition: transform 0.15s ease;
+}
+
+.pa-ai-fab:hover {
+  transform: scale(1.06);
+}
+
+.pa-ai-drawer .ant-drawer-content {
+  border-radius: 14px 0 0 14px;
+  overflow: hidden;
+}
+
+.pa-ai-drawer .ant-drawer-body {
+  height: 100%;
+}
+
+.pa-ai-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+
+.pa-ai-head-actions .pa-ai-icon-btn {
+  color: #64748b;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.pa-ai-head-actions .pa-ai-icon-btn:hover {
+  color: #1677ff;
+  background: #eff6ff;
+}
+
+.pa-ai-chat-frame {
+  flex: 1 1 auto;
+  width: 100%;
+  height: 0;
+  border: 0;
+  min-height: 320px;
+  background: #fff;
+}
+
+.pa-ai-panel-foot {
+  flex-shrink: 0;
+  padding: 8px 14px 10px;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
+  border-top: 1px solid #f1f5f9;
+}
+
+body.pa-parse-ai-open .ant-pro-layout-content {
+  transition: padding-right 0.2s ease;
+}

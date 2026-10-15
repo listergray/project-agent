@@ -280,13 +280,14 @@ def q_n1_rewrite_intent(state: Dict[str, Any]) -> Dict[str, Any]:
         "{\n"
         '  "intent": "RETRIEVAL | TOOL_FIRST | MIXED",\n'
         '    RETRIEVAL: 纯检索知识类（如"工作站怎么申请"）\n'
-        '    TOOL_FIRST: 纯查数类（如"FS-2024-0876 库存多少" "陈昊工号多少" "导出所有资产"）\n'
+        '    TOOL_FIRST: 纯查数类（如"FS-2024-0876 库存多少" "我的待办" "项目统计"）\n'
         '    MIXED: 既要检索又要查库（如"结合制度查 FS-2024-0876 的库存是否合理"）\n'
         '  "rewritten_query": "（把模糊表述改写成标准中文问句，补充同义词展开）",\n'
         '  "target_modules": ["ASSET"|"HR"|"FIN"]  # 命中的模块\n'
         "}\n"
-        "3 个工具：query_resource_by_code（按编码查）、fuzzy_match_resource（名字模糊）、"
-        "export_to_excel（导出结果）。识别出编码或明确查库的直接走 TOOL_FIRST。"
+        "工具：query_resource_by_code / fuzzy_match_resource / export_to_excel / "
+        "query_approved_projects / query_project_todos / query_project_stats。"
+        "待办、待审批、草稿、项目统计、已审批立项列表 → TOOL_FIRST。"
     )
     fallback = IntentRewriteOutput(
         intent="MIXED", rewritten_query=user_query, target_modules=[],
@@ -298,6 +299,22 @@ def q_n1_rewrite_intent(state: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[Search N1] 意图识别 LLM 失败兜底: {e}")
         out = fallback
+    # 待办 / 统计类强制 TOOL_FIRST，避免误走长 RAG 链路导致长时间无正文
+    uq = user_query or ""
+    if any(
+        k in uq
+        for k in (
+            "待办",
+            "待审批",
+            "项目统计",
+            "各多少",
+            "草稿、待审批",
+            "草稿、待审批、已通过",
+        )
+    ):
+        if out.get("intent") != "TOOL_FIRST":
+            logger.info(f"[Search N1] override intent→TOOL_FIRST for todo/stats query")
+            out["intent"] = "TOOL_FIRST"
     logger.info(
         f"[Search N1] intent={out['intent']} modules={out['target_modules']} "
         f"rewritten={out['rewritten_query'][:60]!r}"
@@ -483,95 +500,131 @@ def q_n7_answer_with_tools(state: Dict[str, Any]) -> Dict[str, Any]:
         "\n\n【输出格式二选一】：\n"
         "A) 已足够回答、不再调工具：输出纯 JSON {\"ready\": true}\n"
         "B) 调 1 个工具：输出纯 JSON {\"tool_call\": {\"name\": \"工具名\", \"args\": {...}}}\n"
-        "工具可选：query_resource_by_code / fuzzy_match_resource / export_to_excel / query_approved_projects\n"
+        "工具可选：query_resource_by_code / fuzzy_match_resource / export_to_excel / "
+        "query_approved_projects / query_project_todos / query_project_stats\n"
+        "待办/待审批/草稿 → query_project_todos；项目统计 → query_project_stats；"
+        "已通过立项 → query_approved_projects。\n"
     )
 
-    for step in range(1, MAX_STEPS + 1):
-        try:
-            txt = achain(
-                "你是严格输出 JSON 的决策器，只输出 JSON，不能有其他文字。",
-                decision_prompt,
-                json_mode=True,
-            )
-            obj = json.loads(txt if isinstance(txt, str) else str(txt))
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"[Search N7] step{step} 决策 JSON 解析失败: {e}")
-            break
-
-        # 兼容旧格式：直接带 answer 也视为 ready
-        if obj.get("ready") is True or ("answer" in obj and isinstance(obj.get("answer"), str)):
-            logger.info(f"[Search N7] step{step} 准备最终流式作答")
-            break
-
-        if "tool_call" in obj and isinstance(obj["tool_call"], dict):
-            tc = obj["tool_call"]
-            name = tc.get("name")
-            args = tc.get("args") or {}
-            if name not in RAG_TOOLS_BY_NAME:
-                logger.warning(f"[Search N7] step{step} 请求了未知工具 {name!r}，终止工具循环")
-                break
-            tool = RAG_TOOLS_BY_NAME[name]
-            if name == "export_to_excel" and not args.get("rows"):
-                rows = []
-                for c in ctx:
-                    rows.append({
-                        "来源": c.get("source"),
-                        "标题": c.get("title_path"),
-                        "内容摘要": (c.get("content") or "")[:200],
-                        "相似度": c.get("rrf_score"),
-                    })
-                rows.extend([
-                    {k: v for k, v in f.items() if k != "data"} | (f.get("data") or {})
-                    for f in state.get("fuzzy_candidates") or []
-                ])
-                args["rows"] = rows
-                args.setdefault("filename", "rag_export")
-            try:
-                result = tool.invoke(args)
-            except Exception as e:  # noqa: BLE001
-                result = {"error": str(e)}
-            tool_call_trace.append({"step": step, "name": name, "args": args, "result": result})
-            logger.info(f"[Search N7] step{step} 调工具 {name}")
-            decision_prompt += (
-                f"\n\n【Step{step} 工具调用记录】\n"
-                f"工具：{name}\n参数：{json.dumps(args, ensure_ascii=False)}\n"
-                f"返回：{json.dumps(result, ensure_ascii=False, default=str)[:4000]}\n"
-                "请继续输出纯 JSON：要么 {\"ready\": true} 要么 {\"tool_call\": ...}。"
-            )
-            continue
-
-        break
-
-    # 4) 最终 Markdown 真流式生成（custom stream → SSE token）
-    final_user = (
-        f"{user_prompt}\n\n"
-        f"【工具调用轨迹】\n{json.dumps(tool_call_trace, ensure_ascii=False, default=str)[:6000]}\n\n"
-        "请直接输出最终 Markdown 回答（不要 JSON）。答案前可简要复述问题，末尾列出【来源】。"
-    )
-    parts: List[str] = []
     try:
         from langgraph.config import get_stream_writer
         writer = get_stream_writer()
     except Exception:  # noqa: BLE001
         writer = None
 
+    def _emit_status(message: str, stage: str = "q_n7_answer_with_tools") -> None:
+        if writer is None:
+            return
+        try:
+            writer({"type": "status", "stage": stage, "message": message})
+        except Exception:  # noqa: BLE001
+            pass
+
+    def _emit_token(text: str) -> None:
+        """大块拆小段写出，短答不会一次整段弹出。"""
+        if writer is None or not text:
+            return
+        step = 2 if len(text) > 4 else len(text)
+        try:
+            for i in range(0, len(text), step):
+                writer({"type": "token", "text": text[i : i + step]})
+        except Exception:  # noqa: BLE001
+            pass
+
+    from project_agent.rag_kb.self_rag import _is_chitchat_query
+
+    skip_tools = _is_chitchat_query(q) or _is_chitchat_query(rewritten)
+    if skip_tools:
+        _emit_status("闲聊直出：跳过工具决策，开始流式生成…")
+        logger.info("[Search N7] chitchat → skip tool loop, stream immediately")
+    else:
+        _emit_status("工具增强：决策是否需要查库…")
+        for step in range(1, MAX_STEPS + 1):
+            _emit_status(f"工具决策第 {step}/{MAX_STEPS} 轮…")
+            try:
+                txt = achain(
+                    "你是严格输出 JSON 的决策器，只输出 JSON，不能有其他文字。",
+                    decision_prompt,
+                    json_mode=True,
+                )
+                obj = json.loads(txt if isinstance(txt, str) else str(txt))
+            except Exception as e:  # noqa: BLE001
+                logger.warning(f"[Search N7] step{step} 决策 JSON 解析失败: {e}")
+                break
+
+            # 兼容旧格式：直接带 answer 也视为 ready
+            if obj.get("ready") is True or ("answer" in obj and isinstance(obj.get("answer"), str)):
+                logger.info(f"[Search N7] step{step} 准备最终流式作答")
+                break
+
+            if "tool_call" in obj and isinstance(obj["tool_call"], dict):
+                tc = obj["tool_call"]
+                name = tc.get("name")
+                args = tc.get("args") or {}
+                if name not in RAG_TOOLS_BY_NAME:
+                    logger.warning(f"[Search N7] step{step} 请求了未知工具 {name!r}，终止工具循环")
+                    break
+                tool = RAG_TOOLS_BY_NAME[name]
+                if name == "export_to_excel" and not args.get("rows"):
+                    rows = []
+                    for c in ctx:
+                        rows.append({
+                            "来源": c.get("source"),
+                            "标题": c.get("title_path"),
+                            "内容摘要": (c.get("content") or "")[:200],
+                            "相似度": c.get("rrf_score"),
+                        })
+                    rows.extend([
+                        {k: v for k, v in f.items() if k != "data"} | (f.get("data") or {})
+                        for f in state.get("fuzzy_candidates") or []
+                    ])
+                    args["rows"] = rows
+                    args.setdefault("filename", "rag_export")
+                _emit_status(f"正在调用 {name}…")
+                try:
+                    result = tool.invoke(args)
+                except Exception as e:  # noqa: BLE001
+                    result = {"error": str(e)}
+                tool_call_trace.append({"step": step, "name": name, "args": args, "result": result})
+                logger.info(f"[Search N7] step{step} 调工具 {name}")
+                decision_prompt += (
+                    f"\n\n【Step{step} 工具调用记录】\n"
+                    f"工具：{name}\n参数：{json.dumps(args, ensure_ascii=False)}\n"
+                    f"返回：{json.dumps(result, ensure_ascii=False, default=str)[:4000]}\n"
+                    "请继续输出纯 JSON：要么 {\"ready\": true} 要么 {\"tool_call\": ...}。"
+                )
+                continue
+
+            break
+
+    # 4) 最终 Markdown 真流式生成（custom stream → SSE token）
+    _emit_status("正在流式生成回答…")
+    final_user = (
+        f"{user_prompt}\n\n"
+        f"【工具调用轨迹】\n{json.dumps(tool_call_trace, ensure_ascii=False, default=str)[:6000]}\n\n"
+        "请直接输出最终 Markdown 回答（不要 JSON）。"
+        + (
+            "闲聊请简短友好回复，无需【来源】。"
+            if skip_tools
+            else "答案前可简要复述问题，末尾列出【来源】。"
+        )
+    )
+    parts: List[str] = []
+
     try:
         for tok in stream_achain(sys_prompt, final_user, temperature=0.2):
             parts.append(tok)
-            if writer is not None:
-                try:
-                    writer({"type": "token", "text": tok})
-                except Exception:  # noqa: BLE001
-                    pass
+            _emit_token(tok)
     except Exception as e:  # noqa: BLE001
         logger.warning(f"[Search N7] 流式生成失败，回退非流式: {e}")
         try:
             parts = [achain(sys_prompt, final_user, temperature=0.2)]
+            if parts:
+                _emit_token(parts[0])
         except Exception as e2:  # noqa: BLE001
             parts = [f"（生成失败）{e2}"]
-
     answer = "".join(parts).strip()
-    if answer and "【来源】" not in answer and sources:
+    if answer and "【来源】" not in answer and sources and not skip_tools:
         answer += "\n\n【来源】\n" + "\n".join(f"- {s}" for s in sources)
 
     logger.info(

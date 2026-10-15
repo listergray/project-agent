@@ -11,6 +11,7 @@ import {
   type ProjectStats,
   type ProjectStatus,
 } from '../types'
+import { collectParseGaps } from '../lib/parseChatBridge'
 import './ProjectsPage.css'
 
 const STATUS_LABEL: Record<ProjectStatus, string> = {
@@ -176,6 +177,25 @@ export function ProjectsPage() {
     return () => document.body.classList.remove('pm-embed-body')
   }, [embed])
 
+  // 若依 AI 抽屉回写：把对话里补全的字段合并进表单
+  useEffect(() => {
+    const onMsg = (ev: MessageEvent) => {
+      const data = ev.data
+      if (!data || data.source !== 'pa-parse') return
+      if (data.type === 'pa-fields-patch' && data.fields && typeof data.fields === 'object') {
+        setFields((prev) => ({ ...prev, ...(data.fields as Partial<ProjectFields>) }))
+        setHint('已从 AI 助手同步补全字段，请确认后提交')
+        showToast('已同步 AI 补全字段到表单', 'ok')
+        setStep(2)
+      }
+      if (data.type === 'pa-open-ai') {
+        setAiOpen(true)
+      }
+    }
+    window.addEventListener('message', onMsg)
+    return () => window.removeEventListener('message', onMsg)
+  }, [])
+
   useEffect(() => {
     if (currentUser) setReviewer(currentUser)
   }, [currentUser])
@@ -322,6 +342,27 @@ export function ProjectsPage() {
           'ok',
         )
       }
+
+      // 通知若依壳 → 打开右侧 AI，并以 HumanMessage 方式展示解析摘要 / 待补字段
+      const gaps = collectParseGaps(j.fields)
+      try {
+        window.parent.postMessage(
+          {
+            source: 'pa-projects',
+            type: 'pa-parse-to-chat',
+            filename: j.filename,
+            method: j.method,
+            confidence: j.confidence,
+            fields: j.fields,
+            gaps,
+            warnings: j.warnings || [],
+          },
+          '*',
+        )
+      } catch {
+        /* ignore */
+      }
+      if (!embed) setAiOpen(true)
     } catch (e) {
       const msg = (e as Error).message || String(e)
       if (msg.includes('解析超时')) showToast(msg, 'err')

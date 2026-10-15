@@ -4,7 +4,7 @@ RAG Agent 业务工具（Function Calling）
 【技能点 · Function-Call / Agent 循环】
   ✅ @tool + Pydantic args_schema：供 N7 按 JSON tool_call 调用
   ✅ 工具：query_resource_by_code / fuzzy_match_resource / export_to_excel /
-           query_approved_projects（已审批立项，读业务库）
+           query_approved_projects / query_project_todos / query_project_stats
   ✅ 与 rag_kb.nodes.q_n7_answer_with_tools 组成「思考→选工具→行动→再答」循环（≤3 轮）
   📘 生产替换：将 _ASSET_DB/_HR_DB/_FIN_DB 换成 MySQL/MyBatis 或 Java 微服务 HTTP
 
@@ -438,12 +438,144 @@ def query_approved_projects(keyword: str = "", limit: int = 5) -> dict:
     return res
 
 
+def _project_to_dict(p) -> dict:
+    return {
+        "id": p.id,
+        "project_code": p.project_code,
+        "project_name": p.project_name,
+        "project_type": p.project_type,
+        "status": getattr(p.status, "value", p.status),
+        "owner": p.owner,
+        "department": p.department,
+        "budget": p.budget,
+        "priority": p.priority,
+        "risk_level": p.risk_level,
+        "start_date": p.start_date,
+        "end_date": p.end_date,
+        "submitted_at": getattr(p, "submitted_at", None) or "",
+        "reviewed_at": p.reviewed_at,
+        "reviewer": p.reviewer,
+        "description": (p.description or "")[:200],
+        "updated_at": p.updated_at,
+        "rag_item_pk": p.rag_item_pk or "",
+    }
+
+
+# =====================================================================
+# 工具 5：query_project_todos（立项待办：草稿 / 待审批等）
+# =====================================================================
+class QueryProjectTodosArgs(BaseModel):
+    status: str = Field(
+        "todo",
+        description=(
+            "筛选状态：todo=草稿+待审批（默认）；"
+            "pending|draft|approved|rejected=单状态；all=全部。"
+        ),
+    )
+    keyword: str = Field(
+        "",
+        max_length=128,
+        description="可选关键词，匹配项目名称/编号/负责人/部门；空则按时间倒序返回。",
+    )
+    limit: int = Field(10, ge=1, le=50, description="返回条数，默认 10。")
+
+
+@tool(args_schema=QueryProjectTodosArgs)
+def query_project_todos(status: str = "todo", keyword: str = "", limit: int = 10) -> dict:
+    """
+    【立项待办查询】当用户问「我的待办」「待审批有哪些」「草稿项目」「汇总立项与审批相关待办」时使用。
+    默认返回 draft + pending；也可按单状态或 all 筛选。读项目管理库，不是向量检索。
+    返回：{total, status_filter, projects:[{id, status, project_code, project_name, ...}]}
+    """
+    from project_agent.projects import get_store
+
+    st = (status or "todo").strip().lower()
+    logger.info(f"[Tool.query_project_todos] status={st!r} keyword={keyword!r} limit={limit}")
+    t0 = time.perf_counter()
+    store = get_store()
+    if st in ("todo", "todos", "pending_and_draft", "draft_pending"):
+        items = list(store.list(status="draft")) + list(store.list(status="pending"))
+        status_filter = ["draft", "pending"]
+    elif st == "all":
+        items = list(store.list())
+        status_filter = ["all"]
+    elif st in ("draft", "pending", "approved", "rejected"):
+        items = list(store.list(status=st))
+        status_filter = [st]
+    else:
+        items = list(store.list(status="draft")) + list(store.list(status="pending"))
+        status_filter = ["draft", "pending"]
+        st = "todo"
+
+    kw = (keyword or "").strip().lower()
+    if kw:
+        def _hit(p) -> bool:
+            blob = " ".join([
+                p.project_code or "",
+                p.project_name or "",
+                p.owner or "",
+                p.department or "",
+                p.sponsor or "",
+                p.members or "",
+                p.description or "",
+            ]).lower()
+            return kw in blob
+        items = [p for p in items if _hit(p)]
+
+    items = sorted(
+        items,
+        key=lambda p: p.updated_at or p.submitted_at or p.created_at,
+        reverse=True,
+    )[: max(1, limit)]
+    projects = [_project_to_dict(p) for p in items]
+    res = {
+        "total": len(projects),
+        "status": st,
+        "status_filter": status_filter,
+        "keyword": keyword,
+        "projects": projects,
+        "cost_ms": int((time.perf_counter() - t0) * 1000),
+        "note": "数据来自立项审批库（待办默认含草稿 draft 与待审批 pending）。",
+    }
+    logger.info(f"[Tool.query_project_todos] done total={res['total']} cost={res['cost_ms']}ms")
+    return res
+
+
+# =====================================================================
+# 工具 6：query_project_stats（各状态数量汇总）
+# =====================================================================
+class QueryProjectStatsArgs(BaseModel):
+    unused: str = Field(
+        "",
+        description="占位字段，无需传参；保持工具 schema 可被 JSON 调用。",
+    )
+
+
+@tool(args_schema=QueryProjectStatsArgs)
+def query_project_stats(unused: str = "") -> dict:
+    """
+    【项目统计】当用户问「项目统计」「各状态多少」「草稿/待审批/已通过/已驳回各多少」时使用。
+    返回：{total, draft, pending, approved, rejected, cost_ms}
+    """
+    from project_agent.projects import get_store
+
+    logger.info("[Tool.query_project_stats] start")
+    t0 = time.perf_counter()
+    stats = dict(get_store().stats() or {})
+    stats["cost_ms"] = int((time.perf_counter() - t0) * 1000)
+    stats["note"] = "数据来自立项审批库各状态计数。"
+    logger.info(f"[Tool.query_project_stats] done {stats}")
+    return stats
+
+
 # 导出给上层使用
 RAG_TOOLS = [
     query_resource_by_code,
     fuzzy_match_resource,
     export_to_excel,
     query_approved_projects,
+    query_project_todos,
+    query_project_stats,
 ]
 RAG_TOOLS_BY_NAME = {t.name: t for t in RAG_TOOLS}
 
@@ -454,6 +586,8 @@ __all__ = [
     "fuzzy_match_resource",
     "export_to_excel",
     "query_approved_projects",
+    "query_project_todos",
+    "query_project_stats",
     "_ASSET_DB",
     "_HR_DB",
     "_FIN_DB",

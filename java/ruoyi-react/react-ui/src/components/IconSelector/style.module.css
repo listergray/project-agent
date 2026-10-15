@@ -1,0 +1,132 @@
+.iconPicSearcher {
+  display: inline-block;
+  margin: 0 8px;
+}
+
+.iconPicBtn {
+  color: var(--ant-text-color-secondary);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.iconPicBtn:hover {
+  color: var(--ant-input-icon-hover-color, #1677ff);
+}
+
+.iconPicPreview {
+  width: 30px;
+  height: 30px;
+  margin-top: 10px;
+  padding: 8px;
+  text-align: center;
+  border: 1px solid var(--ant-border-color-base);
+  border-radius: 4px;
+}
+
+.iconPicPreview > img {
+  max-width: 50px;
+  max-height: 50px;
+}
+
+.iconPicSearchResult {
+  min-height: 50px;
+  padding: 0 10px;
+}
+
+.resultTip {
+  padding: 10px 0;
+  color: var(--ant-text-color-secondary);
+}
+
+.resultTable {
+  width: 100%;
+}
+
+.colIcon {
+  width: 80px;
+  padding: 10px 0;
+}
+
+.colIcon > :global(.anticon) {
+  font-size: 30px;
+}
+
+.colIcon > :global(.anticon):hover {
+  color: var(--ant-link-hover-color, #1677ff);
+}
+
+.anticonsList {
+  margin: 2px 0;
+  overflow: hidden;
+  direction: ltr;
+  list-style: none;
+}
+
+.anticonsList li {
+  position: relative;
+  float: left;
+  width: 48px;
+  height: 48px;
+  margin: 3px 0;
+  padding: 2px 0 0;
+  overflow: hidden;
+  color: #555;
+  text-align: center;
+  list-style: none;
+  background-color: inherit;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: color 0.3s ease-in-out, background-color 0.3s ease-in-out;
+}
+
+.anticonsList li :global(.anticon) {
+  margin: 4px 0 2px;
+  font-size: 24px;
+  transition: transform 0.3s ease-in-out;
+  will-change: transform;
+}
+
+.anticonClass {
+  display: block;
+  font-family: 'Lucida Console', Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace;
+  white-space: nowrap;
+  text-align: center;
+  transform: scale(0.83);
+}
+
+.anticonClass :global(.ant-badge) {
+  transition: color 0.3s ease-in-out;
+}
+
+.anticonsList li:hover {
+  color: #fff;
+  background-color: var(--ant-primary-color, #1677ff);
+}
+
+.anticonsList li:hover :global(.anticon) {
+  transform: scale(1.4);
+}
+
+.anticonsList li:hover :global(.ant-badge) {
+  color: #fff;
+}
+
+.anticonsList li.TwoTone:hover {
+  background-color: #8ecafe;
+}
+
+.anticonsList li.copied:hover {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.anticonsList li.copied::after {
+  top: -2px;
+  opacity: 1;
+}
+
+.copiedCode {
+  padding: 2px 4px;
+  font-size: 12px;
+  background: #f5f5f5;
+  border-radius: 2px;
+}

@@ -33,10 +33,36 @@ class GradeOutput(BaseModel):
     better_query: str = Field("", description="若不相关，给出更利于检索的改写问句")
 
 
+_CHITCHAT_EXACT = {
+    "你好", "您好", "你好啊", "您好啊", "你好呀", "嗨", "哈喽", "嗨喽",
+    "hello", "hi", "hey", "hola",
+    "在吗", "在不在", "早上好", "中午好", "下午好", "晚上好", "晚安",
+    "谢谢", "谢谢你", "感谢", "多谢", "ok", "好的", "好", "嗯", "哦",
+}
+
+
+def _is_chitchat_query(text: str) -> bool:
+    """纯问候/寒暄：不需要知识库检索，也不该被 RETRIEVAL 强制 need_rag=true。"""
+    t = (text or "").strip().lower()
+    if not t:
+        return False
+    # 去掉常见标点再比
+    for ch in "！!？?。.~～、，,：:；;…· ":
+        t = t.replace(ch, "")
+    if not t:
+        return False
+    if t in _CHITCHAT_EXACT:
+        return True
+    if len(t) <= 6 and any(t == g or t.startswith(g) for g in ("你好", "您好", "hello", "hi")):
+        return True
+    return False
+
+
 def q_n1a_self_rag_route(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     N1a Self-RAG 路由：要不要走 RAG 检索链。
     - 开关关闭 → 始终 need_rag=true（与改前行为一致）
+    - 纯闲聊/问候 → false（改写 N1 之后仍会执行本节点）
     - TOOL_FIRST → false；RETRIEVAL → true；MIXED → LCEL 判定
     """
     settings = get_settings()
@@ -49,6 +75,19 @@ def q_n1a_self_rag_route(state: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "need_rag": True,
             "self_rag_route_reason": "enable_self_rag_route=false，强制走检索",
+        }
+
+    # 闲聊优先：即使 N1 误标 RETRIEVAL，也不走向量检索
+    if _is_chitchat_query(user_q) or _is_chitchat_query(rewritten):
+        reason = "闲聊/问候，Self-RAG 判定无需知识库检索"
+        logger.info(f"[Self-RAG Route] need_rag=false ({reason})")
+        return {
+            "need_rag": False,
+            "self_rag_route_reason": reason,
+            "reranked_candidates": [],
+            "recalled_chunks": [],
+            "fused_candidates": [],
+            "multi_queries": [],
         }
 
     if intent == "TOOL_FIRST":
@@ -99,7 +138,6 @@ def q_n1a_self_rag_route(state: Dict[str, Any]) -> Dict[str, Any]:
         })
     logger.info(f"[Self-RAG Route] need_rag={need} reason={reason[:100]!r}")
     return result
-
 
 def q_n6b_self_rag_grade(state: Dict[str, Any]) -> Dict[str, Any]:
     """

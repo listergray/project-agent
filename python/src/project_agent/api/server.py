@@ -234,6 +234,12 @@ async def _chat_stream(req: ChatReq):
     streamed_answer = False
     meta_sent = False
     res: Dict[str, Any] = {}
+
+    async def _sse(event: str, payload: dict) -> str:
+        # 让出事件循环，减少 SSE 缓冲成整段才刷的体感
+        await asyncio.sleep(0)
+        return f"event: {event}\ndata: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
     try:
         while True:
             item = await queue.get()
@@ -246,7 +252,8 @@ async def _chat_stream(req: ChatReq):
                 sid0 = item.get("session_id")
                 if sid0 and not meta_sent:
                     meta_sent = True
-                    yield "event: meta\ndata: " + json.dumps(
+                    yield await _sse(
+                        "meta",
                         {
                             "session_id": sid0,
                             "intent": "",
@@ -254,21 +261,21 @@ async def _chat_stream(req: ChatReq):
                             "sources": [],
                             "elapsed_ms": 0,
                         },
-                        ensure_ascii=False,
-                    ) + "\n\n"
-                yield "event: status\ndata: " + json.dumps(
+                    )
+                yield await _sse(
+                    "status",
                     {
                         "stage": item.get("stage"),
                         "message": item.get("message"),
                         "session_id": item.get("session_id"),
                     },
-                    ensure_ascii=False,
-                ) + "\n\n"
+                )
             elif et == "token":
                 streamed_answer = True
                 if not meta_sent and item.get("session_id"):
                     meta_sent = True
-                    yield "event: meta\ndata: " + json.dumps(
+                    yield await _sse(
+                        "meta",
                         {
                             "session_id": item.get("session_id"),
                             "intent": "",
@@ -276,17 +283,10 @@ async def _chat_stream(req: ChatReq):
                             "sources": [],
                             "elapsed_ms": 0,
                         },
-                        ensure_ascii=False,
-                    ) + "\n\n"
-                yield "event: token\ndata: " + json.dumps(
-                    {"text": item.get("text", "")},
-                    ensure_ascii=False,
-                ) + "\n\n"
+                    )
+                yield await _sse("token", {"text": item.get("text", "")})
             elif et == "error":
-                yield "event: error\ndata: " + json.dumps(
-                    {"detail": item.get("detail")},
-                    ensure_ascii=False,
-                ) + "\n\n"
+                yield await _sse("error", {"detail": item.get("detail")})
                 return
             elif et == "result":
                 res = item.get("data") or {}
@@ -294,10 +294,7 @@ async def _chat_stream(req: ChatReq):
         executor.shutdown(wait=False)
 
     if res.get("errors") and not res.get("interrupted"):
-        yield "event: error\ndata: " + json.dumps(
-            {"detail": res["errors"]},
-            ensure_ascii=False,
-        ) + "\n\n"
+        yield await _sse("error", {"detail": res["errors"]})
         return
 
     elapsed = int((time.perf_counter() - t0) * 1000)
@@ -320,19 +317,23 @@ async def _chat_stream(req: ChatReq):
         "need_human_review": bool(res.get("need_human_review")),
         "streamed": streamed_answer,
     }
-    yield "event: meta\ndata: " + json.dumps(meta, ensure_ascii=False) + "\n\n"
+    yield await _sse("meta", meta)
 
     if res.get("interrupted"):
-        yield "event: interrupted\ndata: " + json.dumps(meta, ensure_ascii=False) + "\n\n"
+        yield await _sse("interrupted", meta)
         return
 
     # 若未收到 custom token（旧路径/中断旁路），兜底推送完整答案
     if not streamed_answer:
         ans = str(res.get("answer", ""))
         if ans:
-            yield "event: token\ndata: " + json.dumps({"text": ans}, ensure_ascii=False) + "\n\n"
+            # 兜底也拆片，避免一整坨像非流式
+            step = 2
+            for i in range(0, len(ans), step):
+                yield await _sse("token", {"text": ans[i : i + step]})
+                await asyncio.sleep(0.012)
 
-    yield "event: done\ndata: " + json.dumps({"elapsed_ms": elapsed}, ensure_ascii=False) + "\n\n"
+    yield await _sse("done", {"elapsed_ms": elapsed})
 
 
 @app.post("/api/v1/rag/chat/stream", tags=["RAG 知识库"], summary="SSE 流式问答")

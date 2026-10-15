@@ -1,0 +1,36 @@
+{
+  "name": "myhome",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 18001",
+    "dev:server": "npm --prefix server start",
+    "dev:all": "npm --prefix server start & vite --host 127.0.0.1 --port 18001",
+    "build": "tsc -b && vite build",
+    "build:openplan": "npm --prefix third_party/openplan install && npm --prefix third_party/openplan run build",
+    "build:all": "npm run build:openplan && npm run build",
+    "lint": "oxlint",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.7.0",
+    "dexie": "^4.4.5",
+    "dexie-react-hooks": "^4.4.0",
+    "motion": "^13.1.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2",
+    "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.185.4",
+    "@vitejs/plugin-react": "^6.0.4",
+    "oxlint": "^1.75.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0"
+  }
+}

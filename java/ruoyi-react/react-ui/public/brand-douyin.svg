@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Douyin Auto">
+  <defs>
+    <linearGradient id="dy-bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16161a"/>
+      <stop offset="1" stop-color="#0a0a0c"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#dy-bg)"/>
+  <!-- cyan shadow note -->
+  <g transform="translate(1.5,1)" fill="#25f4ee" opacity="0.95">
+    <path d="M28 14v22.2c-1.4-.8-3.1-1.3-5-1.3-5.2 0-9.4 3.5-9.4 7.8S17.8 50.5 23 50.5c5.1 0 9.2-3.4 9.4-7.6V24.2l12.6-2.6V32c-1.4-.8-3.1-1.2-5-1.2-5.2 0-9.4 3.5-9.4 7.8s4.2 7.8 9.4 7.8c5.2 0 9.4-3.5 9.4-7.8V14.8L28 18.2V14z"/>
+  </g>
+  <!-- magenta shadow note -->
+  <g transform="translate(-1.5,-1)" fill="#fe2c55" opacity="0.95">
+    <path d="M28 14v22.2c-1.4-.8-3.1-1.3-5-1.3-5.2 0-9.4 3.5-9.4 7.8S17.8 50.5 23 50.5c5.1 0 9.2-3.4 9.4-7.6V24.2l12.6-2.6V32c-1.4-.8-3.1-1.2-5-1.2-5.2 0-9.4 3.5-9.4 7.8s4.2 7.8 9.4 7.8c5.2 0 9.4-3.5 9.4-7.8V14.8L28 18.2V14z"/>
+  </g>
+  <!-- white main note -->
+  <path fill="#f8fafc" d="M28 14v22.2c-1.4-.8-3.1-1.3-5-1.3-5.2 0-9.4 3.5-9.4 7.8S17.8 50.5 23 50.5c5.1 0 9.2-3.4 9.4-7.6V24.2l12.6-2.6V32c-1.4-.8-3.1-1.2-5-1.2-5.2 0-9.4 3.5-9.4 7.8s4.2 7.8 9.4 7.8c5.2 0 9.4-3.5 9.4-7.8V14.8L28 18.2V14z"/>
+</svg>
