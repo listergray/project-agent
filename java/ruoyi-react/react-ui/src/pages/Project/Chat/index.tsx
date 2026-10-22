@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { useModel } from '@umijs/max';
+import { resolveAgentOrigin } from '@/utils/subsystemOrigin';
 
 /** 原 python-frontend 智能对话页（完整样式） */
-const PA_ORIGIN = process.env.PA_PORTAL_ORIGIN || 'http://127.0.0.1:8080';
-
 const ChatEmbed: React.FC = () => {
+  const origin = useMemo(() => resolveAgentOrigin(), []);
   const { initialState } = useModel('@@initialState');
   const isSuperAdmin = useMemo(() => {
     const roles = initialState?.currentUser?.roles || [];
@@ -29,7 +29,7 @@ const ChatEmbed: React.FC = () => {
       <iframe
         ref={frameRef}
         title="智能对话"
-        src={`${PA_ORIGIN}/chat?admin=${isSuperAdmin ? '1' : '0'}`}
+        src={`${origin}/chat?admin=${isSuperAdmin ? '1' : '0'}`}
         style={{ width: '100%', border: 0, display: 'block', minHeight: 480 }}
         allow="clipboard-read; clipboard-write"
       />

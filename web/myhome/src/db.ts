@@ -1092,7 +1092,7 @@ export async function exportLedger() {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `我的所有-${todayKey()}.json`
+  a.download = `人生指南-${todayKey()}.json`
   a.click()
   URL.revokeObjectURL(url)
 }

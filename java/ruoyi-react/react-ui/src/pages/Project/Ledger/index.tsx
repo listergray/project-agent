@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { PageContainer, ProColumns, ProTable, ActionType } from '@ant-design/pro-components';
-import { Drawer, Steps, Tag, Timeline, Typography, Statistic, Row, Col, Card, Space } from 'antd';
+import { Drawer, Steps, Tag, Timeline, Typography, Statistic, Row, Col, Card, Space, Tooltip } from 'antd';
 import {
   getPmList, getPmStats, getPm, PmProject, STATUS_LABEL, PIPELINE_STEPS, statusToStepIndex,
 } from '@/services/project/workflow';
+import './index.less';
 
 const statusColor = (status?: string) => {
   switch (status) {
@@ -17,6 +18,33 @@ const statusColor = (status?: string) => {
     case 'approved': return 'success';
     default: return 'default';
   }
+};
+
+const PipelineCell: React.FC<{ status?: string }> = ({ status }) => {
+  const idx = statusToStepIndex(status);
+  const finished = idx >= PIPELINE_STEPS.length;
+  const current = Math.min(idx, PIPELINE_STEPS.length - 1);
+  const label = finished ? '已立项通过' : PIPELINE_STEPS[current]?.title;
+  return (
+    <div className="pm-pipeline">
+      <div className="pm-pipeline-track">
+        {PIPELINE_STEPS.map((step, i) => {
+          const state = finished || idx > i ? 'finish' : idx === i ? 'process' : 'wait';
+          return (
+            <React.Fragment key={step.key}>
+              {i > 0 && <span className={`pm-pipeline-line ${finished || idx > i ? 'on' : ''}`} />}
+              <Tooltip title={step.title}>
+                <span className={`pm-pipeline-dot ${state}`}>
+                  {state === 'finish' ? '✓' : i + 1}
+                </span>
+              </Tooltip>
+            </React.Fragment>
+          );
+        })}
+      </div>
+      <span className="pm-pipeline-label">{label}</span>
+    </div>
+  );
 };
 
 const LedgerPage: React.FC = () => {
@@ -61,16 +89,8 @@ const LedgerPage: React.FC = () => {
       title: '流水线',
       dataIndex: 'pipeline',
       search: false,
-      width: 320,
-      render: (_, row) => {
-        const idx = statusToStepIndex(row.status);
-        return (
-          <Steps size="small" current={Math.min(idx, 5)} items={PIPELINE_STEPS.map((s, i) => ({
-            title: s.title,
-            status: idx > i || idx === 6 ? 'finish' : idx === i ? 'process' : 'wait',
-          }))} />
-        );
-      },
+      width: 280,
+      render: (_, row) => <PipelineCell status={row.status} />,
     },
     { title: '更新时间', dataIndex: 'updatedAt', width: 160, search: false },
   ], []);

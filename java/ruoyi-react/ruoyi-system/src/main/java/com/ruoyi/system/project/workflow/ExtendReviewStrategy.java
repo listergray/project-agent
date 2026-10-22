@@ -21,7 +21,7 @@ public class ExtendReviewStrategy implements ReviewStrategy
                 || SecurityUtils.hasRole("project_admin")
                 || SecurityUtils.hasRole("admin")))
         {
-            throw new ServiceException("???????????/??????");
+            throw new ServiceException("无权进行二次审核");
         }
     }
 

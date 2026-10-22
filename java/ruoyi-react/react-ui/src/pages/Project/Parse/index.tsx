@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useModel } from '@umijs/max';
 import { Button, Drawer, Space, Tooltip, Typography } from 'antd';
 import { CloseOutlined, HistoryOutlined, PlusOutlined } from '@ant-design/icons';
+import { resolveAgentOrigin } from '@/utils/subsystemOrigin';
 import './parse.less';
 
 /** 原 python-frontend 立项/文件解析页（完整样式） */
-const PA_ORIGIN = process.env.PA_PORTAL_ORIGIN || 'http://127.0.0.1:8080';
-
 const ParseEmbed: React.FC = () => {
+  const origin = useMemo(() => resolveAgentOrigin(), []);
   const { initialState } = useModel('@@initialState');
   const isSuperAdmin = useMemo(() => {
     const roles = initialState?.currentUser?.roles || [];
@@ -108,7 +108,7 @@ const ParseEmbed: React.FC = () => {
         <iframe
           ref={frameRef}
           title="文件解析录入"
-          src={`${PA_ORIGIN}/projects?embed=1&tab=create&_=${__APP_VERSION__ || 'dev'}`}
+          src={`${origin}/projects?embed=1&tab=create&_=${__APP_VERSION__ || 'dev'}`}
           style={{ width: '100%', border: 0, display: 'block', minHeight: 480 }}
           allow="clipboard-read; clipboard-write"
         />
@@ -194,7 +194,7 @@ const ParseEmbed: React.FC = () => {
           ref={chatRef}
           title="chat"
           className="pa-ai-chat-frame"
-          src={`${PA_ORIGIN}/chat?embed=1&panel=1&admin=${isSuperAdmin ? '1' : '0'}`}
+          src={`${origin}/chat?embed=1&panel=1&admin=${isSuperAdmin ? '1' : '0'}`}
           allow="clipboard-read; clipboard-write"
         />
         <div className="pa-ai-panel-foot">

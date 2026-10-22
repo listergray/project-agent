@@ -1,5 +1,5 @@
 /**
- * Bridge between the OpenPlan3D iframe and the parent「我的所有」app.
+ * Bridge between the OpenPlan3D iframe and the parent「人生指南」app.
  * Message types:
  *   parent → iframe: { type: 'wodesuoyou:openplan-load', project }
  *   iframe → parent: { type: 'wodesuoyou:openplan-ready' }

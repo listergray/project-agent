@@ -18,14 +18,21 @@ class Settings(BaseSettings):
     browser_profile_dir: str = "./data/browser-profile"
     data_dir: str = "./data"
     upload_timeout_ms: int = 300_000
+    # Keep user publishing queued while another operation holds the profile.
+    browser_wait_timeout_sec: int = 900
+    cover_verify_timeout_ms: int = 60_000
     # Douyin publish location (geo tag)
     default_location: str = "北京市朝阳区"
     # Hashtags appended to 作品简介
     publish_hashtags: str = "#ai编程,#干货"
     # Fallback when DB not ready; DB meta.min_ep is source of truth after seed
-    min_ep: int = 32
-    # Test phase: comma-separated EPs allowed to republish even if SUCCESS (e.g. 32)
-    allow_republish_eps: str = "32"
+    min_ep: int = 36
+    # Comma-separated EPs allowed to republish even if SUCCESS. Empty = none.
+    allow_republish_eps: str = ""
+    # Daily auto-publish of the next unpublished episode (local time)
+    daily_publish_enabled: bool = True
+    daily_publish_hour: int = 19
+    daily_publish_minute: int = 0
 
     @property
     def publish_hashtag_list(self) -> list[str]:
@@ -48,11 +55,11 @@ class Settings(BaseSettings):
     mysql_password: str = "root123456"
     mysql_db: str = "douyin_auto"
 
-    # Login keepalive: periodically open creator center with local profile
+    # Login keepalive: headed off-screen visit (headless does NOT renew Douyin cookies)
     keep_alive_enabled: bool = True
-    keep_alive_interval_min: int = 45
-    # Random jitter minutes: next delay = interval ± jitter (avoids fixed cadence)
-    keep_alive_jitter_min: int = 12
+    # Douyin sessions drop if idle too long; 20±6min is safer than 45
+    keep_alive_interval_min: int = 20
+    keep_alive_jitter_min: int = 6
 
     # DeepSeek / OpenAI-compatible judge (text-only; deepseek-chat 无视觉)
     llm_enabled: bool = True

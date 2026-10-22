@@ -72,7 +72,7 @@ export function Cover() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           >
-            <p className="dsh-kicker">我的所有</p>
+            <p className="dsh-kicker">人生指南</p>
             <h1 className="cover-days tabular">
               {life.ready && !life.expired ? (
                 <>

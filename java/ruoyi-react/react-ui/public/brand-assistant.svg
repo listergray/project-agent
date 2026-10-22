@@ -1,18 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Assistant System">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="助手系统">
   <defs>
-    <linearGradient id="as-bg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0b1f33"/>
-      <stop offset="1" stop-color="#0f766e"/>
+    <linearGradient id="as-bg" x1="8" y1="4" x2="56" y2="60" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2a322c"/>
+      <stop offset="1" stop-color="#1c211d"/>
     </linearGradient>
     <linearGradient id="as-a" x1="18" y1="12" x2="46" y2="54" gradientUnits="userSpaceOnUse">
       <stop stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#e2e8f0"/>
+      <stop offset="1" stop-color="#e4eacd"/>
     </linearGradient>
+    <filter id="as-soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1.5" stdDeviation="1.2" flood-color="#000" flood-opacity="0.22"/>
+    </filter>
   </defs>
-  <!-- full tile -->
-  <rect width="64" height="64" rx="14" fill="url(#as-bg)"/>
-  <!-- broad A — fills the field, generous stroke -->
-  <path fill="url(#as-a)" d="M32 11L50.5 53h-8.2l-3.4-8.2H24.1L20.7 53H12.5L32 11zm0 14.2l-5.1 12.4h10.2L32 25.2z"/>
-  <!-- single strong accent bar under crossbar -->
-  <rect x="22" y="34.8" width="20" height="3.6" rx="1.2" fill="#5eead4"/>
+  <rect width="64" height="64" rx="12" fill="url(#as-bg)"/>
+  <!-- 精致 A -->
+  <path filter="url(#as-soft)" fill="url(#as-a)" d="M32 11L50.5 53h-8.2l-3.4-8.2H24.1L20.7 53H12.5L32 11zm0 14.2l-5.1 12.4h10.2L32 25.2z"/>
+  <!-- 柠绿横杠 -->
+  <rect x="22" y="34.8" width="20" height="3.4" rx="1.2" fill="#baf047"/>
+  <!-- 右下微点缀 -->
+  <circle cx="50" cy="14" r="2.2" fill="#baf047" opacity="0.9"/>
 </svg>

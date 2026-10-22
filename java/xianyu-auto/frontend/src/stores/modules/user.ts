@@ -66,10 +66,10 @@ export const useUserStore = defineStore('user', () => {
     return userInfo.value?.role === 'ADMIN'
   }
 
+  /** 与后端 sa-token.timeout=-1 一致：永不过期 */
   function getTokenRemainingSeconds() {
-    if (!loginTime.value) return 0
-    const elapsed = (Date.now() - loginTime.value) / 1000
-    return Math.max(0, 7200 - elapsed) // 2小时 = 7200秒
+    if (!token.value) return 0
+    return Number.POSITIVE_INFINITY
   }
 
   return {

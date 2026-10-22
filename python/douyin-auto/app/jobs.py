@@ -32,6 +32,25 @@ def create_job(payload: dict[str, Any]) -> dict[str, Any]:
     return job
 
 
+def get_or_create_publish_job(payload: dict[str, Any]) -> tuple[dict[str, Any], bool]:
+    """Repeated clicks/scheduler calls share the same active episode job."""
+    with _lock:
+        root = Path(settings.data_dir) / "jobs"
+        for path in root.glob("*.json"):
+            try:
+                job = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            if job.get("ep") == payload.get("ep") and job.get("status") in ("PENDING", "RUNNING", "NEEDS_REVIEW"):
+                return job, False
+        return create_job(payload), True
+
+
+def episodes_needing_review() -> set[int]:
+    return {int(job["ep"]) for job in list_jobs(limit=10000)
+            if job.get("status") == "NEEDS_REVIEW" and job.get("ep") is not None}
+
+
 def update_job(job_id: str, **fields: Any) -> dict[str, Any]:
     with _lock:
         job = get_job(job_id)

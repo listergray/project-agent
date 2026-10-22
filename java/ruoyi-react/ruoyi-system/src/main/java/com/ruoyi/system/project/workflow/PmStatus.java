@@ -22,21 +22,21 @@ public final class PmStatus
         switch (status)
         {
             case DRAFT:
-                return "??";
+                return "草稿";
             case PENDING_BASIC:
-                return "?????";
+                return "待一次审核";
             case BASIC_PASSED:
-                return "?????";
+                return "一次审通过";
             case PENDING_EXTEND:
-                return "?????";
+                return "待二次审核";
             case EXTEND_PASSED:
-                return "?????";
+                return "二次审通过";
             case PENDING_PURCHASE:
-                return "?????";
+                return "购买联审中";
             case PENDING_FINANCE:
-                return "?????";
+                return "财务联审中";
             case APPROVED:
-                return "?????";
+                return "已立项通过";
             default:
                 return status;
         }

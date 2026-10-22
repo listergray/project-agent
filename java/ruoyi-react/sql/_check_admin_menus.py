@@ -1,4 +1,4 @@
-﻿import json, urllib.request, ssl
+import json, urllib.request, ssl
 # login as admin
 body = json.dumps({"username":"admin","password":"admin123","code":"","uuid":""}).encode()
 req = urllib.request.Request("http://127.0.0.1:8088/login", data=body, headers={"Content-Type":"application/json"}, method="POST")

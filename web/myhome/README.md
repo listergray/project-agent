@@ -1,10 +1,10 @@
-# 我的所有（myhome）
+# 人生指南（myhome）
 
 个人资产 / 小居 / 待办与账本。已并入 `project_agent` 子系统，经若依门户 iframe 打开。
 
 - 前端：`http://127.0.0.1:18001`
 - API：`http://127.0.0.1:18002`（Vite 代理 `/api`）
-- 门户：`/portal/home` → 「我的所有」→ `/subsystem/myhome`
+- 门户：`/portal/home` → 「人生指南」→ `/subsystem/myhome`
 
 ## 启动
 

@@ -64,8 +64,12 @@ def scan_videos(
             from app import db as episode_db
 
             done = episode_db.published_eps()
+            done.update(episode_db.episodes_needing_review())
         except Exception:
             done = set()
+        from app import jobs
+
+        done.update(jobs.episodes_needing_review())
 
     root = Path(directory).expanduser().resolve()
     if not root.is_dir():

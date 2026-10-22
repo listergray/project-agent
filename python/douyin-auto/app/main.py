@@ -11,9 +11,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import db, jobs, keepalive, scanner
+from app import daily, db, jobs, keepalive, scanner
 from app.config import settings
-from app.publisher import bootstrap_login_cache, check_login, open_login_browser, publish_video
+from app.publisher import bootstrap_login_cache, browser_busy, check_login, open_login_browser, publish_video, verify_published_video
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,7 +57,12 @@ async def index() -> FileResponse:
 
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
-    out: dict[str, Any] = {"ok": True, "port": settings.server_port}
+    out: dict[str, Any] = {
+        "ok": True, "port": settings.server_port,
+        "browser": browser_busy(),
+        "coverVerification": "stable-previews",
+        "publishConfirmation": "submission-evidence",
+    }
     try:
         out["db"] = db.ping()
     except Exception as e:
@@ -189,42 +194,43 @@ async def job_get(job_id: str) -> dict[str, Any]:
     return job
 
 
-@app.post("/api/publish")
-async def publish(body: PublishRequest) -> dict[str, Any]:
-    video = Path(body.videoPath).expanduser()
-    if not video.is_file():
-        raise HTTPException(400, f"文件不存在: {video}")
+@app.post("/api/jobs/{job_id}/verify")
+async def verify_job(job_id: str) -> dict[str, Any]:
+    job = jobs.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "任务不存在")
+    if job.get("status") in ("PENDING", "RUNNING"):
+        raise HTTPException(409, "任务仍在执行，请等待结束后核对")
+    checked = await verify_published_video(job.get("title") or "")
+    if checked.get("busy"):
+        raise HTTPException(409, checked["message"])
+    if checked.get("ok"):
+        message = "已在作品管理核对到本条视频（未重新发布）"
+        db.upsert_episode(int(job["ep"]), status="SUCCESS", title=job.get("title"),
+                          job_id=job_id, message=message, mark_published=True)
+        jobs.update_job(job_id, status="SUCCESS", message=message,
+                        result={**(job.get("result") or {}), "ok": True, "verification": checked})
+    return {"job": jobs.get_job(job_id), "verification": checked}
 
-    meta = scanner.resolve_sidecar(video)
-    # Prefer sidecar 标题.txt / 封面上传版_3比4|4比3; body can override coverPath.
-    title = (body.title or meta["title"] or video.stem).strip()
-    cover_v = meta.get("coverPathV")
-    cover_h = meta.get("coverPathH")
-    cover = body.coverPath or meta.get("coverPath")
-    if body.coverPath and not cover_v and not cover_h:
-        cover_v = body.coverPath
-    description = meta.get("description") or ""
-    location = (body.location if body.location is not None else settings.default_location).strip()
-    ep = scanner.ep_number(video.name)
-    if ep is None:
-        raise HTTPException(400, "文件名需包含 EP.数字（如 EP.32）")
-    try:
-        min_ep = db.get_min_ep()
-        if ep < min_ep:
-            raise HTTPException(400, f"EP.{ep} 早于起始集 EP.{min_ep}（≤{db.LEGACY_THROUGH_EP} 已记录为已发布）")
-        if ep in db.published_eps():
-            raise HTTPException(400, f"EP.{ep} 已在库中标记为已发布")
-        if ep in settings.allow_republish_ep_set:
-            try:
-                db.clear_episode_success(ep)
-            except Exception as e:
-                logger.warning("clear SUCCESS for republish EP.%s: %s", ep, e)
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.warning("episode db check skipped: %s", e)
 
-    job = jobs.create_job(
+def publish_result_status(result: dict[str, Any]) -> str:
+    if result.get("ok"):
+        return "SUCCESS"
+    return "NEEDS_REVIEW" if result.get("unconfirmed") else "FAILED"
+
+
+def start_publish(
+    video: Path,
+    *,
+    title: str,
+    cover: str | None,
+    cover_v: str | None,
+    cover_h: str | None,
+    description: str,
+    location: str,
+    ep: int,
+) -> dict[str, Any]:
+    job, created = jobs.get_or_create_publish_job(
         {
             "videoPath": str(video.resolve()),
             "title": title,
@@ -239,6 +245,8 @@ async def publish(body: PublishRequest) -> dict[str, Any]:
         }
     )
     job_id = job["id"]
+    if not created:
+        return {"jobId": job_id, "job": job}
 
     try:
         db.upsert_episode(
@@ -262,6 +270,9 @@ async def publish(body: PublishRequest) -> dict[str, Any]:
             except Exception:
                 pass
 
+        def on_submit() -> None:
+            jobs.update_job(job_id, publishAttempted=True, message="正在提交发布，随后核对结果")
+
         try:
             result = asyncio.run(
                 publish_video(
@@ -273,10 +284,11 @@ async def publish(body: PublishRequest) -> dict[str, Any]:
                     description=description,
                     location=location,
                     on_progress=on_progress,
+                    on_submit=on_submit,
                 )
             )
             ok = bool(result.get("ok"))
-            status = "SUCCESS" if ok else "FAILED"
+            status = publish_result_status(result)
             message = result.get("message") or ""
             jobs.update_job(job_id, status=status, message=message, result=result)
             try:
@@ -296,24 +308,104 @@ async def publish(body: PublishRequest) -> dict[str, Any]:
                 logger.warning("upsert %s failed: %s", status, e)
         except Exception as e:
             logger.exception("publish job failed")
-            jobs.update_job(job_id, status="FAILED", message=str(e))
+            attempted = bool((jobs.get_job(job_id) or {}).get("publishAttempted"))
+            status = "NEEDS_REVIEW" if attempted else "FAILED"
+            message = "已尝试提交但执行中断，结果待核对，请勿重复发布" if attempted else str(e)
+            jobs.update_job(job_id, status=status, message=message)
             try:
                 db.upsert_episode(
                     ep,
-                    status="FAILED",
+                    status=status,
                     video_name=video.name,
                     video_path=str(video.resolve()),
                     title=title,
                     cover_path=cover,
                     location=location,
                     job_id=job_id,
-                    message=str(e),
+                    message=message,
                 )
             except Exception:
                 pass
 
     threading.Thread(target=runner, name=f"douyin-publish-{job_id}", daemon=True).start()
     return {"jobId": job_id, "job": job}
+
+
+def enqueue_scanned(item: dict[str, Any]) -> dict[str, Any]:
+    video = Path(item["path"])
+    ep = int(item["ep"])
+    return start_publish(
+        video,
+        title=(item.get("title") or video.stem).strip(),
+        cover=item.get("coverPath"),
+        cover_v=item.get("coverPathV"),
+        cover_h=item.get("coverPathH"),
+        description=item.get("description") or "",
+        location=settings.default_location,
+        ep=ep,
+    )
+
+
+@app.post("/api/publish/next")
+async def publish_next(force: bool = False) -> dict[str, Any]:
+    """Publish the next unpublished episode. Used by the 19:00 schedule."""
+    return await asyncio.to_thread(daily.run_once, force=force)
+
+
+@app.get("/api/publish/schedule")
+async def publish_schedule() -> dict[str, Any]:
+    return daily.status()
+
+
+@app.post("/api/publish")
+async def publish(body: PublishRequest) -> dict[str, Any]:
+    video = Path(body.videoPath).expanduser()
+    if not video.is_file():
+        raise HTTPException(400, f"文件不存在: {video}")
+
+    meta = scanner.resolve_sidecar(video)
+    # Prefer sidecar 标题.txt / 封面上传版_3比4|4比3; body can override coverPath.
+    title = (body.title or meta["title"] or video.stem).strip()
+    cover_v = meta.get("coverPathV")
+    cover_h = meta.get("coverPathH")
+    cover = body.coverPath or meta.get("coverPath")
+    if body.coverPath and not cover_v and not cover_h:
+        cover_v = body.coverPath
+    description = meta.get("description") or ""
+    location = (body.location if body.location is not None else settings.default_location).strip()
+    ep = scanner.ep_number(video.name)
+    if ep is None:
+        raise HTTPException(400, "文件名需包含 EP.数字（如 EP.32）")
+    if ep in jobs.episodes_needing_review():
+        raise HTTPException(409, f"EP.{ep} 的发布结果待核对，请先到作品管理确认，避免重复发布")
+    try:
+        min_ep = db.get_min_ep()
+        if ep < min_ep:
+            raise HTTPException(400, f"EP.{ep} 早于起始集 EP.{min_ep}，已发布的集不再扫描")
+        if ep in db.published_eps():
+            raise HTTPException(400, f"EP.{ep} 已在库中标记为已发布")
+        if ep in db.episodes_needing_review():
+            raise HTTPException(409, f"EP.{ep} 的发布结果待核对，请先确认作品管理")
+        if ep in settings.allow_republish_ep_set:
+            try:
+                db.clear_episode_success(ep)
+            except Exception as e:
+                logger.warning("clear SUCCESS for republish EP.%s: %s", ep, e)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.warning("episode db check skipped: %s", e)
+
+    return start_publish(
+        video.resolve(),
+        title=title,
+        cover=cover,
+        cover_v=cover_v,
+        cover_h=cover_h,
+        description=description,
+        location=location,
+        ep=ep,
+    )
 
 
 def _persist_env() -> None:
@@ -374,6 +466,11 @@ async def on_startup() -> None:
         keepalive.start_background()
     except Exception:
         logger.exception("keepalive start failed")
+    try:
+        daily.set_enqueue(enqueue_scanned)
+        daily.start_background()
+    except Exception:
+        logger.exception("daily publish start failed")
     logger.info(
         "douyin-auto ready on :%s video_dir=%s min_ep=%s keepalive=%sm",
         settings.server_port,
@@ -386,3 +483,4 @@ async def on_startup() -> None:
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
     keepalive.stop_background()
+    daily.stop_background()

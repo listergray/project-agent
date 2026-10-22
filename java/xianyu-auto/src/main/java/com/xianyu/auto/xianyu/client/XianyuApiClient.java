@@ -17,6 +17,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -306,6 +307,69 @@ public class XianyuApiClient {
     /** 发布商品（payload 结构对齐网页端 publish） */
     public JsonNode publishItem(String cookie, Map<String, Object> publishData) {
         return callApi(XianyuApiConst.API_ITEM_PUBLISH, cookie, publishData);
+    }
+
+    public JsonNode editItem(String cookie, Map<String, Object> publishData) {
+        return callApi(XianyuApiConst.API_ITEM_EDIT, cookie, publishData);
+    }
+
+    /** 发布页类目推荐 */
+    public JsonNode recommendCategory(String cookie, String title, String description,
+                                      List<Map<String, Object>> imageInfos) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("title", title);
+        params.put("description", description != null ? description : title);
+        params.put("lockCpv", false);
+        params.put("multiSKU", false);
+        params.put("publishScene", "mainPublish");
+        params.put("scene", "newPublishChoice");
+        params.put("imageInfos", imageInfos != null ? imageInfos : List.of());
+        params.put("uniqueCode", String.valueOf(System.currentTimeMillis()) + "000");
+        return callApi(XianyuApiConst.API_CATEGORY_RECOMMEND, cookie, params);
+    }
+
+    /** 默认常用地址（用于 itemAddrDTO） */
+    public JsonNode getLocalPoi(String cookie, double longitude, double latitude) {
+        Map<String, Object> params = new HashMap<>();
+        params.put("longitude", longitude);
+        params.put("latitude", latitude);
+        return callApi(XianyuApiConst.API_LOCAL_POI, cookie, params);
+    }
+
+    /**
+     * 上传图片到闲鱼，返回 object.url / object.pix（如 800x600）
+     */
+    public JsonNode uploadImage(String cookie, byte[] imageBytes, String filename) {
+        if (imageBytes == null || imageBytes.length == 0) {
+            throw new BusinessException("图片内容为空");
+        }
+        String name = (filename == null || filename.isBlank()) ? "cover.png" : filename;
+        RequestBody fileBody = RequestBody.create(imageBytes, MediaType.parse("image/png"));
+        okhttp3.MultipartBody body = new okhttp3.MultipartBody.Builder()
+                .setType(okhttp3.MultipartBody.FORM)
+                .addFormDataPart("file", name, fileBody)
+                .build();
+        Request request = new Request.Builder()
+                .url(XianyuApiConst.UPLOAD_MEDIA_URL)
+                .header("Cookie", cookie)
+                .header("Origin", "https://www.goofish.com")
+                .header("Referer", XianyuApiConst.REFERER)
+                .header("User-Agent", XianyuApiConst.USER_AGENT)
+                .post(body)
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            String respBody = response.body() != null ? response.body().string() : "{}";
+            if (!response.isSuccessful()) {
+                throw new BusinessException("上传图片 HTTP 失败: " + response.code() + " " + respBody);
+            }
+            JsonNode result = JsonUtils.fromJson(respBody, JsonNode.class);
+            if (result == null || result.path("object").path("url").asText("").isEmpty()) {
+                throw new BusinessException("上传图片失败: " + respBody);
+            }
+            return result.path("object");
+        } catch (IOException e) {
+            throw new BusinessException("上传图片异常: " + e.getMessage(), e);
+        }
     }
 
     public JsonNode downShelfItem(String cookie, String itemId) {

@@ -71,7 +71,7 @@
         <label style="margin-left:12px"><input id="headless" type="checkbox" /> 无头模式（不推荐）</label>
       </div>
       <p class="muted" style="margin:8px 0 0" id="keepAliveInfo"></p>
-      <p class="muted" style="margin:8px 0 0">首次请点「扫码登录」，在弹出浏览器中登录抖音创作者中心；登录态保存在本地 profile；服务会定期访问创作者中心保活（45min）。</p>
+      <p class="muted" style="margin:8px 0 0">首次请点「扫码登录」，在弹出浏览器中登录抖音创作者中心；登录态保存在本地 profile；服务约每 20 分钟用有头离屏浏览器访问创作者中心续期（无头保活无效）。若仍显示未登录，请重新扫码。每天 19:00 自动发布列表中的下一集；已发布的视频不再显示（EP.32–35 已记为已发布）。</p>
     </div>
     <div class="card">
       <div class="row" style="justify-content:space-between;margin-bottom:10px">
@@ -174,26 +174,49 @@
       } catch (e) { toast(String(e.message || e)); }
     }
     async function pollJob(id) {
-      for (let i = 0; i < 120; i++) {
+      for (let errors = 0; errors < 5;) {
         await sleep(2000);
         try {
           const j = await api('/api/jobs/' + id);
+          errors = 0;
           loadJobs();
-          if (j.status === 'SUCCESS' || j.status === 'FAILED') { toast(j.status + ': ' + (j.message || '')); return; }
-        } catch (_) {}
+          if (['SUCCESS', 'FAILED', 'NEEDS_REVIEW'].includes(j.status)) {
+            toast(j.status + ': ' + (j.message || ''));
+            if (j.status === 'SUCCESS') scanOnly().catch(() => {});
+            return;
+          }
+        } catch (_) { errors++; }
       }
+      toast('任务状态暂时无法连接，请刷新任务查看');
+    }
+    let jobsRefreshTimer;
+    async function verifyJob(id) {
+      toast('正在核对作品管理，请稍候…');
+      try {
+        const r = await api('/api/jobs/' + id + '/verify', {method: 'POST'});
+        toast(r.verification.message);
+        await loadJobs();
+        if (r.verification.ok) scanOnly().catch(() => {});
+      } catch (e) { toast(String(e.message || e)); }
     }
     async function loadJobs() {
+      clearTimeout(jobsRefreshTimer);
       const data = await api('/api/jobs');
       const tb = $('jobs'); tb.innerHTML = '';
       for (const j of data.list) {
-        const cls = j.status === 'SUCCESS' ? 'ok' : j.status === 'FAILED' ? 'bad' : 'run';
+        const cls = j.status === 'SUCCESS' ? 'ok' : ['FAILED', 'NEEDS_REVIEW'].includes(j.status) ? 'bad' : 'run';
+        const label = j.status === 'NEEDS_REVIEW' ? '待核对' : j.status;
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${j.id}</td><td>${escapeHtml(j.title || '')}</td>
-          <td><span class="tag ${cls}">${j.status}</span></td>
-          <td class="muted">${escapeHtml(j.message || '')}</td>
+          <td><span class="tag ${cls}">${label}</span></td>
+          <td class="muted">${escapeHtml(j.message || '')}${j.status === 'NEEDS_REVIEW' ? '<br><button class="verify-btn">核对结果</button>' : ''}</td>
           <td class="muted">${j.updatedAt ? new Date(j.updatedAt).toLocaleString() : '-'}</td>`;
         tb.appendChild(tr);
+        const verify = tr.querySelector('.verify-btn');
+        if (verify) verify.addEventListener('click', () => verifyJob(j.id));
+      }
+      if (data.list.some(j => ['PENDING', 'RUNNING'].includes(j.status))) {
+        jobsRefreshTimer = setTimeout(() => loadJobs().catch(() => {}), 5000);
       }
     }
     function renderKeepAlive(ka) {

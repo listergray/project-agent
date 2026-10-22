@@ -132,7 +132,42 @@ export default defineConfig({
   antd: {
     appConfig: {},
     configProvider: {
-      variant: 'filled',
+      variant: 'outlined',
+      theme: {
+        token: {
+          colorPrimary: '#1c211d',
+          colorInfo: '#1c211d',
+          colorSuccess: '#6b7a3d',
+          colorBgBase: '#f4f3ed',
+          colorBgContainer: '#ffffff',
+          colorBgLayout: '#f4f3ed',
+          colorBorder: '#d5d7cd',
+          colorText: '#1c211d',
+          colorTextSecondary: '#646960',
+          colorTextTertiary: '#646960',
+          borderRadius: 4,
+          fontFamily:
+            '"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif',
+        },
+        components: {
+          Button: {
+            primaryShadow: 'none',
+            defaultBorderColor: '#d5d7cd',
+          },
+          Menu: {
+            itemBg: '#f4f3ed',
+            subMenuItemBg: '#f4f3ed',
+            itemSelectedBg: '#e4eacd',
+            itemHoverBg: '#e4eacd',
+            itemSelectedColor: '#1c211d',
+          },
+          Layout: {
+            headerBg: '#f4f3ed',
+            bodyBg: '#f4f3ed',
+            siderBg: '#f4f3ed',
+          },
+        },
+      },
     },
   },
   /**

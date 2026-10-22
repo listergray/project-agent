@@ -29,7 +29,7 @@ HINT = (
     + u(0xFF1B, 0x767B, 0x5F55, 0x6001, 0x4FDD, 0x5B58, 0x5728, 0x672C, 0x5730) + " profile"
     + u(0xFF1B)
     + u(0x670D, 0x52A1, 0x4F1A, 0x5B9A, 0x671F, 0x8BBF, 0x95EE, 0x521B, 0x4F5C, 0x8005, 0x4E2D, 0x5FC3, 0x4FDD, 0x6D3B, 0xFF08)
-    + "45min"
+    + "20min"
     + u(0xFF09, 0x3002)
 )
 L_LIST = u(0x89C6, 0x9891, 0x5217, 0x8868)
@@ -218,26 +218,45 @@ html = f"""<!DOCTYPE html>
       }} catch (e) {{ toast(String(e.message || e)); }}
     }}
     async function pollJob(id) {{
-      for (let i = 0; i < 120; i++) {{
+      for (let errors = 0; errors < 5;) {{
         await sleep(2000);
         try {{
           const j = await api('/api/jobs/' + id);
+          errors = 0;
           loadJobs();
-          if (j.status === 'SUCCESS' || j.status === 'FAILED') {{ toast(j.status + ': ' + (j.message || '')); return; }}
-        }} catch (_) {{}}
+          if (['SUCCESS', 'FAILED', 'NEEDS_REVIEW'].includes(j.status)) {{ toast(j.status + ': ' + (j.message || '')); return; }}
+        }} catch (_) {{ errors++; }}
       }}
+      toast('任务状态暂时无法连接，请刷新任务查看');
+    }}
+    let jobsRefreshTimer;
+    async function verifyJob(id) {{
+      toast('正在核对作品管理，请稍候…');
+      try {{
+        const r = await api('/api/jobs/' + id + '/verify', {{method: 'POST'}});
+        toast(r.verification.message);
+        await loadJobs();
+        if (r.verification.ok) scanOnly().catch(() => {{}});
+      }} catch (e) {{ toast(String(e.message || e)); }}
     }}
     async function loadJobs() {{
+      clearTimeout(jobsRefreshTimer);
       const data = await api('/api/jobs');
       const tb = $('jobs'); tb.innerHTML = '';
       for (const j of data.list) {{
-        const cls = j.status === 'SUCCESS' ? 'ok' : j.status === 'FAILED' ? 'bad' : 'run';
+        const cls = j.status === 'SUCCESS' ? 'ok' : ['FAILED', 'NEEDS_REVIEW'].includes(j.status) ? 'bad' : 'run';
+        const label = j.status === 'NEEDS_REVIEW' ? '待核对' : j.status;
         const tr = document.createElement('tr');
         tr.innerHTML = `<td>${{j.id}}</td><td>${{escapeHtml(j.title || '')}}</td>
-          <td><span class="tag ${{cls}}">${{j.status}}</span></td>
-          <td class="muted">${{escapeHtml(j.message || '')}}</td>
+          <td><span class="tag ${{cls}}">${{label}}</span></td>
+          <td class="muted">${{escapeHtml(j.message || '')}}${{j.status === 'NEEDS_REVIEW' ? '<br><button class="verify-btn">核对结果</button>' : ''}}</td>
           <td class="muted">${{j.updatedAt ? new Date(j.updatedAt).toLocaleString() : '-'}}</td>`;
         tb.appendChild(tr);
+        const verify = tr.querySelector('.verify-btn');
+        if (verify) verify.addEventListener('click', () => verifyJob(j.id));
+      }}
+      if (data.list.some(j => ['PENDING', 'RUNNING'].includes(j.status))) {{
+        jobsRefreshTimer = setTimeout(() => loadJobs().catch(() => {{}}), 5000);
       }}
     }}
     function renderKeepAlive(ka) {{

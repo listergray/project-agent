@@ -31,6 +31,12 @@ export default {
       changeOrigin: true,
       pathRewrite: { '^/pa-api': '' },
     },
+    // 与 nginx 网关同路径，本机 :8000 也可嵌 /gw/agent iframe（静态资源仍建议走 :9080）
+    '/gw/agent/': {
+      target: 'http://127.0.0.1:8080/',
+      changeOrigin: true,
+      pathRewrite: { '^/gw/agent': '' },
+    },
   },
 
   /**

@@ -13,7 +13,9 @@ from app.config import settings
 logger = logging.getLogger("douyin-auto.db")
 
 LEGACY_THROUGH_EP = 31
-DEFAULT_MIN_EP = 32
+# EP.32-35 ??????? EP.36 ?
+DEFAULT_MIN_EP = 36
+PUBLISHED_THROUGH_EP = 35
 
 
 @contextmanager
@@ -80,11 +82,13 @@ def init_db() -> dict[str, Any]:
             )
 
     seeded = seed_legacy_through(LEGACY_THROUGH_EP)
+    marked = mark_published_range(LEGACY_THROUGH_EP + 1, PUBLISHED_THROUGH_EP)
     set_meta("min_ep", str(DEFAULT_MIN_EP))
     set_meta("legacy_through_ep", str(LEGACY_THROUGH_EP))
+    set_meta("published_through_ep", str(PUBLISHED_THROUGH_EP))
     set_meta(
         "note",
-        f"EP.1-EP.{LEGACY_THROUGH_EP} already published; continue from EP.{DEFAULT_MIN_EP}",
+        f"EP.1-EP.{PUBLISHED_THROUGH_EP} already published; continue from EP.{DEFAULT_MIN_EP}",
     )
     # keep in-memory settings aligned
     settings.min_ep = DEFAULT_MIN_EP
@@ -100,8 +104,10 @@ def init_db() -> dict[str, Any]:
         "ok": True,
         "database": settings.mysql_db,
         "legacyThroughEp": LEGACY_THROUGH_EP,
+        "publishedThroughEp": PUBLISHED_THROUGH_EP,
         "minEp": DEFAULT_MIN_EP,
         "seeded": seeded,
+        "markedPublished": marked,
     }
 
 
@@ -140,12 +146,52 @@ def set_meta(key: str, value: str) -> None:
             )
 
 
+def claim_daily_publish(today: str) -> bool:
+    """Return True only the first time `today` (YYYY-MM-DD) is claimed."""
+    with connect(settings.mysql_db) as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO dy_meta (meta_key, meta_value)
+                VALUES ('daily_publish_date', %s)
+                ON DUPLICATE KEY UPDATE
+                  meta_value = IF(meta_value = VALUES(meta_value), meta_value, VALUES(meta_value))
+                """,
+                (today,),
+            )
+            return cur.rowcount > 0
+
+
 def get_meta(key: str, default: str | None = None) -> str | None:
     with connect(settings.mysql_db) as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT meta_value FROM dy_meta WHERE meta_key=%s", (key,))
             row = cur.fetchone()
             return row["meta_value"] if row else default
+
+
+def mark_published_range(start_ep: int, end_ep: int) -> int:
+    """Mark start_ep..end_ep as SUCCESS so scans skip them. Does not downgrade LEGACY."""
+    if end_ep < start_ep:
+        return 0
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    n = 0
+    with connect(settings.mysql_db) as conn:
+        with conn.cursor() as cur:
+            for ep in range(start_ep, end_ep + 1):
+                cur.execute(
+                    """
+                    INSERT INTO dy_episode (ep, status, message, published_at)
+                    VALUES (%s, 'SUCCESS', %s, %s)
+                    ON DUPLICATE KEY UPDATE
+                      status = IF(status = 'LEGACY', status, 'SUCCESS'),
+                      message = IF(status = 'LEGACY', message, %s),
+                      published_at = IFNULL(published_at, VALUES(published_at))
+                    """,
+                    (ep, f"EP.{ep} already published", now, f"EP.{ep} already published"),
+                )
+                n += 1
+    return n
 
 
 def get_min_ep() -> int:
@@ -166,7 +212,15 @@ def published_eps() -> set[int]:
                 "SELECT ep FROM dy_episode WHERE status IN ('LEGACY', 'SUCCESS')"
             )
             done = {int(r["ep"]) for r in cur.fetchall()}
-    return done - settings.allow_republish_ep_set
+    # Published episodes stay off the list. allow_republish no longer puts them back.
+    return done
+
+
+def episodes_needing_review() -> set[int]:
+    with connect(settings.mysql_db) as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT ep FROM dy_episode WHERE status = 'NEEDS_REVIEW'")
+            return {int(row["ep"]) for row in cur.fetchall()}
 
 
 def clear_episode_success(ep: int, *, message: str = "????????") -> bool:

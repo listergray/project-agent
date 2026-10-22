@@ -5,9 +5,16 @@ import { PipelinePage } from './pages/PipelinePage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { UploadPage } from './pages/UploadPage'
 
+/** Under nginx gateway the app is served at /gw/agent/*; keep local root otherwise. */
+function gatewayBasename(): string {
+  if (typeof window === 'undefined') return '/'
+  const m = window.location.pathname.match(/^(.*?\/gw\/agent)(?=\/|$)/)
+  return m?.[1] || '/'
+}
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={gatewayBasename()}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/projects" element={<ProjectsPage />} />

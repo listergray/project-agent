@@ -1,14 +1,6 @@
-import Footer from '@/components/Footer';
 import { getCaptchaImg, login, loginGuest } from '@/services/system/auth';
 import { getFakeCaptcha } from '@/services/ant-design-pro/login';
-import {
-  AlipayCircleOutlined,
-  LockOutlined,
-  MobileOutlined,
-  TaobaoCircleOutlined,
-  UserOutlined,
-  WeiboCircleOutlined,
-} from '@ant-design/icons';
+import { LockOutlined, MobileOutlined, UserOutlined } from '@ant-design/icons';
 import {
   LoginForm,
   ProFormCaptcha,
@@ -16,8 +8,8 @@ import {
   ProFormText,
 } from '@ant-design/pro-components';
 import { createStyles } from 'antd-style';
-import { FormattedMessage, history, SelectLang, useIntl, useModel, Helmet } from '@umijs/max';
-import { Alert, Button, Col, Row, Tabs, Image, message } from 'antd';
+import { FormattedMessage, SelectLang, useIntl, useModel, Helmet } from '@umijs/max';
+import { Alert, Button, Tabs, message } from 'antd';
 import Settings from '../../../../config/defaultSettings';
 import React, { useEffect, useState } from 'react';
 import { flushSync } from 'react-dom';
@@ -27,31 +19,6 @@ import { getRoutersInfo, setRemoteMenu, getFirstMenuPath } from '@/services/sess
 function wantsPortalHome(roles: string[]) {
   return roles.includes('admin') || roles.includes('guest');
 }
-
-const useActionStyles = createStyles(({ token }) => ({
-  icon: {
-    marginLeft: '8px',
-    color: 'rgba(0, 0, 0, 0.2)',
-    fontSize: '24px',
-    verticalAlign: 'middle',
-    cursor: 'pointer',
-    transition: 'color 0.3s',
-    '&:hover': {
-      color: token.colorPrimaryActive,
-    },
-  },
-}));
-
-const ActionIcons = () => {
-  const { styles } = useActionStyles();
-  return (
-    <>
-      <AlipayCircleOutlined key="AlipayCircleOutlined" className={styles.icon} />
-      <TaobaoCircleOutlined key="TaobaoCircleOutlined" className={styles.icon} />
-      <WeiboCircleOutlined key="WeiboCircleOutlined" className={styles.icon} />
-    </>
-  );
-};
 
 const useLangStyles = createStyles(({ token }) => ({
   lang: {
@@ -103,10 +70,101 @@ const Login: React.FC = () => {
       display: 'flex',
       flexDirection: 'column',
       height: '100vh',
-      overflow: 'auto',
-      backgroundImage:
-        "url('https://mdn.alipayobjects.com/yuyan_qk0oxh/afts/img/V-_oS6r-i7wAAAAAAAAAAAAAFl94AQBr')",
-      backgroundSize: '100% 100%',
+      overflow: 'hidden',
+      background: '#f4f3ed',
+      color: '#1c211d',
+      fontFamily: '"PingFang SC","Microsoft YaHei","Noto Sans CJK SC",Arial,sans-serif',
+      '.ant-pro-form-login-container': {
+        background: 'transparent !important',
+        height: 'auto !important',
+        padding: '0 !important',
+        minHeight: '0 !important',
+      },
+      '.ant-pro-form-login-main': {
+        background: '#ffffff',
+        border: '1px solid #d5d7cd',
+        borderRadius: 4,
+        padding: '16px 20px 4px',
+        boxShadow: '0 8px 28px rgba(28,33,29,0.06)',
+        width: '100% !important',
+        maxWidth: 360,
+        margin: '0 auto',
+      },
+      '.ant-pro-form-login-header': {
+        marginBottom: 4,
+      },
+      '.ant-pro-form-login-logo img': {
+        width: 40,
+        height: 40,
+      },
+      '.ant-pro-form-login-title': {
+        fontSize: 24,
+        lineHeight: 1.25,
+        color: '#1c211d',
+      },
+      '.ant-pro-form-login-desc': {
+        color: '#646960 !important',
+        marginBottom: 8,
+        fontSize: 13,
+      },
+      '.ant-tabs': {
+        marginBottom: 4,
+      },
+      '.ant-tabs-nav': {
+        marginBottom: 8,
+      },
+      '.ant-form-item': {
+        marginBottom: 14,
+      },
+      '.ant-btn-primary': {
+        background: '#1c211d !important',
+        borderColor: '#1c211d !important',
+        borderRadius: 4,
+      },
+      '.ant-btn-primary:hover': {
+        background: '#2a322c !important',
+        borderColor: '#2a322c !important',
+      },
+      '.ant-tabs-ink-bar': {
+        background: '#1c211d',
+      },
+      '.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn': {
+        color: '#1c211d',
+      },
+      '.ant-input-affix-wrapper, .ant-input': {
+        borderRadius: 4,
+        borderColor: '#d5d7cd',
+      },
+      '.captcha-row': {
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 8,
+        width: '100%',
+      },
+      '.captcha-row .captcha-input': {
+        flex: 1,
+        minWidth: 0,
+      },
+      '.captcha-row .captcha-input .ant-form-item': {
+        marginBottom: 14,
+      },
+      '.captcha-row .captcha-img': {
+        flex: '0 0 auto',
+        height: 40,
+        marginTop: 0,
+        marginBottom: 14,
+        border: '1px solid #d5d7cd',
+        borderRadius: 4,
+        cursor: 'pointer',
+        overflow: 'hidden',
+        background: '#fff',
+      },
+      '.captcha-row .captcha-img img': {
+        display: 'block',
+        height: 38,
+        width: 110,
+        objectFit: 'cover',
+      },
     },
   }))();
 
@@ -222,14 +280,21 @@ const Login: React.FC = () => {
       <Lang />
       <div
         style={{
-          flex: '1',
-          padding: '32px 0',
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '16px 16px 12px',
+          minHeight: 0,
+          overflow: 'hidden',
         }}
       >
+        <div style={{ width: '100%', maxWidth: 360 }}>
         <LoginForm
           contentStyle={{
             minWidth: 280,
-            maxWidth: '75vw',
+            maxWidth: 360,
+            width: '100%',
           }}
           logo={<img alt="logo" src="/brand-assistant.svg" />}
           title="Project Agent"
@@ -237,14 +302,7 @@ const Login: React.FC = () => {
           initialValues={{
             autoLogin: true,
           }}
-          actions={[
-            <FormattedMessage
-              key="loginWith"
-              id="pages.login.loginWith"
-              defaultMessage="其他登录方式"
-            />,
-            <ActionIcons key="icons" />,
-          ]}
+          actions={[]}
           onFinish={async (values) => {
             await handleSubmit(values as API.LoginParams);
           }}
@@ -327,46 +385,40 @@ const Login: React.FC = () => {
                   },
                 ]}
               />
-              <Row>
-                <Col flex={3}>
+              <div className="captcha-row">
+                <div className="captcha-input">
                   <ProFormText
-                    style={{
-                      float: 'right',
-                    }}
                     name="code"
+                    fieldProps={{ size: 'large' }}
                     placeholder={intl.formatMessage({
                       id: 'pages.login.captcha.placeholder',
-                      defaultMessage: '请输入验证',
+                      defaultMessage: '请输入验证码',
                     })}
                     rules={[
                       {
                         required: true,
                         message: (
                           <FormattedMessage
-                            id="pages.searchTable.updateForm.ruleName.nameRules"
-                            defaultMessage="请输入验证啊"
+                            id="pages.login.captcha.required"
+                            defaultMessage="请输入验证码！"
                           />
                         ),
                       },
                     ]}
                   />
-                </Col>
-                <Col flex={2}>
-                  <Image
-                    src={captchaCode}
-                    alt="验证码"
-                    style={{
-                      display: 'inline-block',
-                      verticalAlign: 'top',
-                      cursor: 'pointer',
-                      paddingLeft: '10px',
-                      width: '100px',
-                    }}
-                    preview={false}
-                    onClick={() => getCaptchaCode()}
-                  />
-                </Col>
-              </Row>
+                </div>
+                <div
+                  className="captcha-img"
+                  onClick={() => getCaptchaCode()}
+                  title={'\u70b9\u51fb\u5237\u65b0\u9a8c\u8bc1\u7801'}
+                >
+                  {captchaCode ? (
+                    <img src={captchaCode} alt={'\u9a8c\u8bc1\u7801'} />
+                  ) : (
+                    <span style={{ display: 'inline-block', width: 110, height: 38 }} />
+                  )}
+                </div>
+              </div>
             </>
           )}
 
@@ -452,33 +504,36 @@ const Login: React.FC = () => {
               />
             </>
           )}
-          <div
-            style={{
-              marginBottom: 24,
-            }}
-          >
+          <div style={{ marginBottom: 8 }}>
             <ProFormCheckbox noStyle name="autoLogin">
               <FormattedMessage id="pages.login.rememberMe" defaultMessage="自动登录" />
             </ProFormCheckbox>
-            <a
-              style={{
-                float: 'right',
-              }}
-            >
+            <a style={{ float: 'right' }}>
               <FormattedMessage id="pages.login.forgotPassword" defaultMessage="忘记密码" />
             </a>
           </div>
         </LoginForm>
-        <div style={{ maxWidth: 328, margin: '0 auto', padding: '0 0 24px' }}>
-          <Button block size="large" onClick={handleGuestLogin}>
+        <div style={{ marginTop: 12 }}>
+          <Button
+            block
+            size="large"
+            onClick={handleGuestLogin}
+            style={{
+              background: '#e4eacd',
+              borderColor: '#d5d7cd',
+              color: '#1c211d',
+              borderRadius: 4,
+              fontWeight: 600,
+            }}
+          >
             {'\u6e38\u5ba2\u767b\u5f55'}
           </Button>
-          <div style={{ marginTop: 8, color: '#94a3b8', fontSize: 12, textAlign: 'center' }}>
+          <div style={{ marginTop: 6, color: '#646960', fontSize: 12, textAlign: 'center' }}>
             {'\u65e0\u9700\u8d26\u53f7\uff0c\u4ec5\u53ef\u6d4f\u89c8\u9879\u76ee\u7ba1\u7406\u6a21\u5757'}
           </div>
         </div>
+        </div>
       </div>
-      <Footer />
     </div>
   );
 };

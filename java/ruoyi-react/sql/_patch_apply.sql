@@ -1,4 +1,4 @@
-﻿-- 用户 pro / 123456 · 角色「项目管理员」· 项目管理双菜单
+-- 用户 pro / 123456 · 角色「项目管理员」· 项目管理双菜单
 -- 密码 BCrypt（123456），部署时由脚本生成后替换 $2a$10$lXnzgf4KodXveCTe6khFv.OXcmK7KPliF9BQI..zxhTZtbjoSaJuW
 
 -- 角色

@@ -21,7 +21,7 @@ public class PurchaseReviewStrategy implements ReviewStrategy
                 || SecurityUtils.hasRole("project_admin")
                 || SecurityUtils.hasRole("admin")))
         {
-            throw new ServiceException("??????????????");
+            throw new ServiceException("无权进行购买联审");
         }
     }
 

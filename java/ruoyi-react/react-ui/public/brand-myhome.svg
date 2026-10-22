@@ -1,15 +1,23 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Myhome">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="人生指南">
   <defs>
     <linearGradient id="mh-bg" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#3d4a52"/>
-      <stop offset="1" stop-color="#1a2228"/>
+      <stop stop-color="#2f3830"/>
+      <stop offset="1" stop-color="#1c211d"/>
+    </linearGradient>
+    <linearGradient id="mh-dial" x1="20" y1="16" x2="44" y2="48" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#e4eacd"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="14" fill="url(#mh-bg)"/>
-  <!-- house -->
-  <path fill="#d4dbe0" d="M32 14L12 30.5V50h14V38h12v12h14V30.5L32 14z"/>
-  <!-- accent eave -->
-  <path fill="#9a3b32" d="M10 31.2L32 12.8l22 18.4-2.2 2.6L32 17.8 12.2 33.8 10 31.2z"/>
-  <!-- door -->
-  <rect x="28" y="40" width="8" height="10" rx="1" fill="#1a2228"/>
+  <rect width="64" height="64" rx="12" fill="url(#mh-bg)"/>
+  <!-- 外环 -->
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#f4f3ed" stroke-width="2.6" opacity="0.95"/>
+  <circle cx="32" cy="32" r="15.2" fill="url(#mh-dial)" opacity="0.14"/>
+  <!-- 刻度 -->
+  <path stroke="#f4f3ed" stroke-width="1.6" stroke-linecap="round" opacity="0.7" d="M32 14.5v3.2M32 46.3v3.2M14.5 32h3.2M46.3 32h3.2"/>
+  <!-- 指针 -->
+  <path fill="#baf047" d="M32 15.5l5.2 16.8c.4 1.3-.6 2.5-1.9 2.5h-6.6c-1.3 0-2.3-1.2-1.9-2.5L32 15.5z"/>
+  <path fill="#f4f3ed" d="M32 48.5l-4.6-14.8c-.4-1.2.6-2.4 1.8-2.4h5.6c1.2 0 2.2 1.2 1.8 2.4L32 48.5z"/>
+  <circle cx="32" cy="32" r="3.2" fill="#1c211d"/>
+  <circle cx="32" cy="32" r="1.5" fill="#baf047"/>
 </svg>

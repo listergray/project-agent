@@ -144,20 +144,7 @@ router.beforeEach(async (to, _from, next) => {
         return
       }
     }
-    // Token 过期检查：剩余时间少于 30 分钟时自动刷新
-    const remaining = userStore.getTokenRemainingSeconds()
-    if (remaining > 0 && remaining < 1800 && !sessionStorage.getItem('refreshTokenRunning')) {
-      sessionStorage.setItem('refreshTokenRunning', 'true')
-      try {
-        await userStore.refreshToken()
-      } catch (e) {
-        await userStore.logout()
-        next('/login')
-        return
-      } finally {
-        sessionStorage.removeItem('refreshTokenRunning')
-      }
-    }
+    // 内部登录永不过期（sa-token.timeout=-1），不再按前端假定时刷新/踢出
     next()
   } else {
     if (whiteList.includes(to.path) || to.meta.public) {

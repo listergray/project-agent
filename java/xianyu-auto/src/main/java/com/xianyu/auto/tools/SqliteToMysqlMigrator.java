@@ -20,7 +20,7 @@ import java.util.Set;
  * 用法（项目根目录）:
  *   mvn -q -DskipTests exec:java -Dexec.classpathScope=compile \
  *     "-Dexec.mainClass=com.xianyu.auto.tools.SqliteToMysqlMigrator" \
- *     "-Dexec.args=./data/xianyu.db jdbc:mysql://127.0.0.1:53306/xx_erp?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8 root YOUR_PASSWORD"
+ *     "-Dexec.args=./data/xianyu.db jdbc:mysql://127.0.0.1:53306/xx_erp?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci root YOUR_PASSWORD"
  */
 public final class SqliteToMysqlMigrator {
 
@@ -36,7 +36,7 @@ public final class SqliteToMysqlMigrator {
     public static void main(String[] args) throws Exception {
         String sqlitePath = args.length > 0 ? args[0] : "./data/xianyu.db";
         String mysqlUrl = args.length > 1 ? args[1]
-                : "jdbc:mysql://127.0.0.1:53306/xx_erp?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai";
+                : "jdbc:mysql://127.0.0.1:53306/xx_erp?useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai";
         String user = args.length > 2 ? args[2] : "root";
         String password = args.length > 3 ? args[3] : "";
 

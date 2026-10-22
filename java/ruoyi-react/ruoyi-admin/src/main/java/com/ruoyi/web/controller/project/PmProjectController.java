@@ -25,7 +25,7 @@ import com.ruoyi.system.domain.PmReviewRequest;
 import com.ruoyi.system.service.IPmProjectService;
 
 /**
- * ???? API
+ * 项目管理 API
  */
 @RestController
 @RequestMapping("/project/pm")
@@ -48,7 +48,7 @@ public class PmProjectController extends BaseController
         List<PmProject> page = from >= all.size() ? List.of() : all.subList(from, to);
         TableDataInfo rsp = new TableDataInfo();
         rsp.setCode(HttpStatus.SUCCESS);
-        rsp.setMsg("????");
+        rsp.setMsg("查询成功");
         rsp.setRows(page);
         rsp.setTotal(all.size());
         return rsp;
@@ -70,7 +70,7 @@ public class PmProjectController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('project:pm:basic:edit')")
-    @Log(title = "??????", businessType = BusinessType.INSERT)
+    @Log(title = "新建基础信息", businessType = BusinessType.INSERT)
     @PostMapping("/basic")
     public AjaxResult createBasic(@RequestBody PmProject project)
     {
@@ -78,7 +78,7 @@ public class PmProjectController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('project:pm:basic:edit')")
-    @Log(title = "??????", businessType = BusinessType.UPDATE)
+    @Log(title = "更新基础信息", businessType = BusinessType.UPDATE)
     @PutMapping("/basic")
     public AjaxResult updateBasic(@RequestBody PmProject project)
     {
@@ -86,7 +86,7 @@ public class PmProjectController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('project:pm:basic:edit')")
-    @Log(title = "??????", businessType = BusinessType.UPDATE)
+    @Log(title = "提交一次审核", businessType = BusinessType.UPDATE)
     @PostMapping("/basic/submit")
     public AjaxResult submitBasic(@RequestBody Map<String, String> body)
     {
@@ -94,7 +94,7 @@ public class PmProjectController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('project:pm:extend:edit')")
-    @Log(title = "??????", businessType = BusinessType.UPDATE)
+    @Log(title = "更新扩展信息", businessType = BusinessType.UPDATE)
     @PutMapping("/extend")
     public AjaxResult updateExtend(@RequestBody PmProject project)
     {
@@ -102,7 +102,7 @@ public class PmProjectController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('project:pm:extend:edit')")
-    @Log(title = "??????", businessType = BusinessType.UPDATE)
+    @Log(title = "提交二次审核", businessType = BusinessType.UPDATE)
     @PostMapping("/extend/submit")
     public AjaxResult submitExtend(@RequestBody Map<String, String> body)
     {
@@ -110,7 +110,7 @@ public class PmProjectController extends BaseController
     }
 
     @PreAuthorize("@ss.hasPermi('project:pm:extend:edit')")
-    @Log(title = "??????", businessType = BusinessType.UPDATE)
+    @Log(title = "提交购买联审", businessType = BusinessType.UPDATE)
     @PostMapping("/purchase/submit")
     public AjaxResult submitPurchase(@RequestBody Map<String, String> body)
     {
@@ -118,7 +118,7 @@ public class PmProjectController extends BaseController
     }
 
     @PreAuthorize("@ss.hasAnyPermi('project:pm:audit:basic,project:pm:audit:extend,project:pm:audit:purchase,project:pm:audit:finance')")
-    @Log(title = "????", businessType = BusinessType.UPDATE)
+    @Log(title = "项目审核", businessType = BusinessType.UPDATE)
     @PostMapping("/review")
     public AjaxResult review(@RequestBody PmReviewRequest request)
     {

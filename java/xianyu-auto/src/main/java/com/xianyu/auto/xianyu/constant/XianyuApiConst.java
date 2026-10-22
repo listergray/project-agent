@@ -73,6 +73,17 @@ public final class XianyuApiConst {
 
     /** PC 发布商品 */
     public static final String API_ITEM_PUBLISH = "mtop.idle.pc.idleitem.publish";
+    public static final String API_ITEM_EDIT = "mtop.idle.pc.idleitem.edit";
+
+    /** 发布类目推荐 */
+    public static final String API_CATEGORY_RECOMMEND = "mtop.taobao.idle.kgraph.property.recommend";
+
+    /** 发布默认地址 POI */
+    public static final String API_LOCAL_POI = "mtop.taobao.idle.local.poi.get";
+
+    /** 图片流式上传 */
+    public static final String UPLOAD_MEDIA_URL =
+            "https://stream-upload.goofish.com/api/upload.api?floderId=0&appkey=xy_chat&_input_charset=utf-8";
 
     /** 下架/删除商品（以实际抓包为准，常见为 edit/down） */
     public static final String API_ITEM_DOWN = "mtop.idle.pc.idleitem.downshelf";

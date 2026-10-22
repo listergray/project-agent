@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import threading
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -11,18 +10,20 @@ from typing import Any, Callable
 from playwright.async_api import Page, async_playwright
 
 from app.config import settings
+from app.browser_gate import BrowserGate
+from app.cover_check import collect_cover_state
+from app.publish_confirmation import check_management, find_work, is_publish_request, submission_evidence
 
 logger = logging.getLogger("douyin-auto.publisher")
 
 UPLOAD_URL = "https://creator.douyin.com/creator-micro/content/upload"
 HOME_URL = "https://creator.douyin.com/"
+MANAGE_URL = "https://creator.douyin.com/creator-micro/content/manage"
 
 ProgressCb = Callable[[str], None]
 
 # One Chromium profile cannot be opened twice; serialize all browser ops.
-_browser_lock = threading.Lock()
-_lock_holder = ""
-_lock_meta = threading.Lock()
+_browser_gate = BrowserGate()
 _login_cache: dict[str, Any] = {"at": 0.0, "result": None}
 # Memory TTL for skipping Playwright; disk keeps last known status across restarts.
 _LOGIN_CACHE_TTL_SEC = 90.0
@@ -84,31 +85,42 @@ def bootstrap_login_cache() -> dict[str, Any] | None:
 
 
 def browser_busy() -> dict[str, Any]:
-    with _lock_meta:
-        holder = _lock_holder
-    return {"busy": bool(holder), "holder": holder or None}
+    return _browser_gate.status()
 
 
 def _try_acquire(holder: str, *, wait_sec: float = 0) -> bool:
-    global _lock_holder
-    if wait_sec <= 0:
-        ok = _browser_lock.acquire(blocking=False)
-    else:
-        ok = _browser_lock.acquire(blocking=True, timeout=wait_sec)
-    if ok:
-        with _lock_meta:
-            _lock_holder = holder
-    return ok
+    return _browser_gate.acquire(holder, wait_sec=wait_sec)
 
 
 def _release() -> None:
-    global _lock_holder
-    with _lock_meta:
-        _lock_holder = ""
+    _browser_gate.release()
+
+
+async def _wait_for_publish_browser(
+    progress: ProgressCb, *, timeout_sec: float | None = None,
+) -> bool:
+    """Wait without blocking an executor or acquiring the profile after cancellation."""
+    timeout = settings.browser_wait_timeout_sec if timeout_sec is None else timeout_sec
+    ticket = _browser_gate.enqueue_publish()
+    deadline = time.monotonic() + timeout
+    last_report = 0.0
     try:
-        _browser_lock.release()
-    except RuntimeError:
-        pass
+        while True:
+            if _browser_gate.acquire_publish(ticket):
+                return True
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            if time.monotonic() - last_report >= 5:
+                info = browser_busy()
+                holder = {"keepalive": "登录保活", "login": "扫码登录", "publish": "上一条发布"}.get(
+                    info.get("holder"), "其他浏览器操作"
+                )
+                progress(f"等待浏览器：{holder}进行中，已排队（共 {info['waitingPublish']} 个任务等待）")
+                last_report = time.monotonic()
+            await asyncio.sleep(min(0.5, remaining))
+    finally:
+        _browser_gate.cancel_publish(ticket)
 
 
 async def open_login_browser(timeout_sec: int = 300) -> dict[str, Any]:
@@ -175,34 +187,19 @@ def _cached_login(now: float | None = None, *, allow_disk: bool = True) -> dict[
     return None
 
 
-async def check_login(force: bool = False, soft: bool = False) -> dict[str, Any]:
-    """Probe login.
+async def refresh_session() -> dict[str, Any]:
+    """Keepalive: headed off-screen visit to refresh Douyin cookies.
 
-    - soft/default after restart: prefer disk/memory cache so UI won't flash 未登录
-    - force=True: always open Playwright and update disk
+    Headless probes do NOT renew session (Douyin ignores/kills them). This opens a
+    real Chromium window off-screen, hits home + content manage, then closes.
     """
-    now = time.time()
-    if not force:
-        hit = _cached_login(now, allow_disk=True)
-        if hit is not None:
-            # soft: never launch browser; hard refresh still uses short memory TTL above
-            if soft or hit.get("ok") or hit.get("fromDisk"):
-                return hit
-        if soft:
-            # No usable cache — report unknown without wiping disk
-            return {"ok": False, "message": "尚未检测（点刷新状态或扫码登录）", "cached": True}
-
-    # Never block long for status; login/publish have priority.
-    if not await asyncio.to_thread(_try_acquire, "status", wait_sec=0):
-        hit = _cached_login(now, allow_disk=True)
-        if hit is not None:
-            hit["cached"] = True
-            return hit
+    # A background probe must not queue ahead of publishing or a QR login.
+    if not _try_acquire("keepalive"):
         info = browser_busy()
         return {
             "ok": False,
-            "message": f"检测跳过（忙碌: {info.get('holder') or 'busy'}）",
-            "cached": True,
+            "busy": True,
+            "message": f"浏览器忙碌（{info.get('holder') or 'busy'}），稍后重试",
         }
 
     try:
@@ -210,33 +207,84 @@ async def check_login(force: bool = False, soft: bool = False) -> dict[str, Any]
         async with async_playwright() as p:
             context = await p.chromium.launch_persistent_context(
                 user_data_dir=_profile_dir(),
-                headless=True,
-                viewport={"width": 1400, "height": 900},
+                headless=False,
+                viewport={"width": 1280, "height": 800},
                 locale="zh-CN",
-                args=["--disable-blink-features=AutomationControlled"],
+                args=[
+                    "--disable-blink-features=AutomationControlled",
+                    # Park window off-screen so keepalive is not disruptive
+                    "--window-position=-32000,-32000",
+                    "--window-size=1280,800",
+                ],
             )
             page = context.pages[0] if context.pages else await context.new_page()
             try:
-                await page.goto(HOME_URL, wait_until="domcontentloaded", timeout=60_000)
-                await page.wait_for_timeout(1500)
+                try:
+                    await page.goto(HOME_URL, wait_until="domcontentloaded", timeout=90_000)
+                except Exception as e:
+                    logger.warning("keepalive home goto: %s", e)
+                await page.wait_for_timeout(2500)
+
+                # Second hit: content manage — stronger session touch
+                try:
+                    await page.goto(MANAGE_URL, wait_until="domcontentloaded", timeout=90_000)
+                    await page.wait_for_timeout(2500)
+                except Exception as e:
+                    logger.warning("keepalive manage goto: %s", e)
+
+                # Light interaction to look less like a dead probe
+                try:
+                    await page.mouse.move(200, 200)
+                    await page.evaluate("window.scrollTo(0, 300)")
+                    await page.wait_for_timeout(800)
+                except Exception:
+                    pass
+
                 logged_in = await _is_logged_in(page)
+                cookies = await page.context.cookies()
+                names = {c.get("name") for c in cookies}
+                has_sess = bool({"sessionid", "sid_guard", "uid_tt"} & names)
+
+                if logged_in:
+                    return _remember_login({"ok": True, "message": "保活成功·已登录"}, persist=True)
+                if has_sess:
+                    # Cookies present but UI not confirmed — still count as soft success
+                    # so we don't wipe a session that renews slowly.
+                    out = _remember_login(
+                        {"ok": True, "message": "保活完成·cookie仍在"},
+                        persist=True,
+                    )
+                    return out
                 return _remember_login(
-                    {"ok": logged_in, "message": "已登录" if logged_in else "未登录"},
+                    {"ok": False, "message": "保活失败·未登录，请重新扫码"},
                     persist=True,
                 )
             finally:
                 await context.close()
     except Exception as e:
-        logger.exception("check_login failed")
-        # Do not overwrite a recent successful disk cache on transient probe errors.
-        hit = _cached_login(now, allow_disk=True)
-        if hit and hit.get("ok"):
-            hit["cached"] = True
-            hit["message"] = f"{hit.get('message')}（本次检测失败已忽略）"
-            return hit
-        return {"ok": False, "message": f"检测失败: {e}"}
+        logger.exception("refresh_session failed")
+        return {"ok": False, "message": f"保活异常: {e}"}
     finally:
         _release()
+
+
+async def check_login(force: bool = False, soft: bool = False) -> dict[str, Any]:
+    """Probe login (UI). Prefer cache; force opens headed off-screen (same as keepalive).
+
+    - soft/default after restart: prefer disk/memory cache so UI won't flash 未登录
+    - force=True: real browser probe (not headless — Douyin rejects headless)
+    """
+    now = time.time()
+    if not force:
+        hit = _cached_login(now, allow_disk=True)
+        if hit is not None:
+            if soft or hit.get("ok") or hit.get("fromDisk"):
+                return hit
+        if soft:
+            return {"ok": False, "message": "尚未检测（点刷新状态或扫码登录）", "cached": True}
+
+    # Manual「刷新状态」: reuse refresh_session (headed) instead of headless.
+    return await refresh_session()
 
 
 async def publish_video(
@@ -248,6 +296,7 @@ async def publish_video(
     description: str | None = None,
     location: str | None = None,
     on_progress: ProgressCb | None = None,
+    on_submit: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     video = Path(video_path).expanduser().resolve()
     if not video.is_file():
@@ -275,17 +324,26 @@ async def publish_video(
         if on_progress:
             on_progress(msg)
 
-    if not await asyncio.to_thread(_try_acquire, "publish", wait_sec=5.0):
-        info = browser_busy()
+    if not await _wait_for_publish_browser(progress):
         return {
             "ok": False,
-            "message": f"浏览器忙碌中（{info.get('holder') or 'busy'}），请稍后再试",
+            "stage": "browser_wait",
+            "retryable": True,
+            "message": "等待浏览器超时，尚未上传或发布，请等待当前浏览器操作结束后重试",
         }
 
-    settings.ensure_dirs()
     # Always show browser for publish so user can finish captcha / see blockers.
     use_headless = False
+    attempted = False
+
+    def submitting() -> None:
+        nonlocal attempted
+        attempted = True
+        if on_submit:
+            on_submit()
+
     try:
+        settings.ensure_dirs()
         async with async_playwright() as p:
             context = await p.chromium.launch_persistent_context(
                 user_data_dir=_profile_dir(),
@@ -331,24 +389,24 @@ async def publish_video(
                 await _dismiss_guides(page)
 
                 ok_cover = True
+                cover_check: dict[str, Any] | None = None
                 if cover_v or cover_h:
                     progress("分别上传横/竖封面(跳过AI)...")
-                    ok_cover = await _set_covers(page, cover_v=cover_v, cover_h=cover_h, progress=progress)
+                    upload_confirmed = await _set_covers(page, cover_v=cover_v, cover_h=cover_h, progress=progress)
                     await _dismiss_guides(page)
                     await _close_cover_modal_if_open(page)
-                    # DOM + DeepSeek text judge (deepseek-chat 无视觉，看页面事实)
-                    cover_check = await _verify_covers_with_llm(
+                    cover_check = await _verify_covers(
                         page,
                         expect_v=bool(cover_v),
                         expect_h=bool(cover_h),
                         progress=progress,
                     )
-                    if cover_check.get("ok") is False:
-                        ok_cover = False
+                    cover_check["uploadConfirmed"] = upload_confirmed
+                    ok_cover = upload_confirmed and bool(cover_check.get("ok"))
+                    if not ok_cover:
                         progress(f"封面质检未通过: {cover_check.get('reason')}")
-                    elif cover_check.get("ok") is True:
-                        ok_cover = True
-                        progress("封面质检通过（DeepSeek）")
+                    else:
+                        progress("封面预览已确认并稳定")
 
                 if location:
                     progress(f"设置定位: {location}")
@@ -360,18 +418,24 @@ async def publish_video(
                 if not ok_meta.get("title") or not (title_now or "").strip():
                     missing.append("标题为空")
                 if (cover_v or cover_h) and not ok_cover:
-                    missing.append("封面未上传成功")
+                    missing.append(
+                        "封面选图或保存未完成" if not (cover_check or {}).get("uploadConfirmed")
+                        else "封面预览未确认（详见检测记录）"
+                    )
                 if not ok_meta.get("topics"):
                     missing.append("话题未写入作品简介")
                 if await _cover_modal_open(page):
                     missing.append("封面设置弹窗仍打开")
                 if missing:
-                    await _save_debug_shot(page, "prepublish_blocked")
+                    screenshot = await _save_debug_shot(page, "prepublish_blocked")
                     msg = "；".join(missing) + " — 未点击发布，请检查后重试"
                     progress(msg)
                     return {
                         "ok": False,
                         "message": msg,
+                        "stage": "prepublish_check",
+                        "coverCheck": cover_check,
+                        "screenshot": screenshot,
                         "title": title,
                         "video": str(video),
                         "coverV": str(cover_v) if cover_v else None,
@@ -387,11 +451,14 @@ async def publish_video(
                 await page.wait_for_timeout(800)
 
                 progress("表单已确认，点击发布并等待跳转作品管理...")
-                publish_result = await _click_publish_and_confirm(page, progress)
+                publish_result = await _click_publish_and_confirm(page, progress, expected_title=title, on_submit=submitting)
                 if not publish_result.get("ok"):
                     await _save_debug_shot(page, "publish_unconfirmed")
                     return {
                         "ok": False,
+                        "unconfirmed": bool(publish_result.get("unconfirmed")),
+                        "publishAttempted": attempted,
+                        "stage": "publish_confirmation",
                         "message": publish_result.get("message")
                         or "已点发布但未确认成功，请到创作者中心「作品管理」核对",
                         "title": title,
@@ -407,6 +474,8 @@ async def publish_video(
                 result = {
                     "ok": True,
                     "message": publish_result.get("message") or "发布成功",
+                    "coverCheck": cover_check,
+                    "publishEvidence": publish_result.get("evidence"),
                     "title": title,
                     "video": str(video),
                     "cover": str(cover_v or cover_h) if (cover_v or cover_h) else None,
@@ -419,9 +488,44 @@ async def publish_video(
                 return result
             except Exception as e:
                 logger.exception("发布失败")
-                return {"ok": False, "message": str(e)}
+                return {
+                    "ok": False, "unconfirmed": attempted, "publishAttempted": attempted,
+                    "message": ("已尝试提交发布，但浏览器中断，结果待核对，请勿重复发布" if attempted else str(e)),
+                    "error": str(e),
+                }
             finally:
-                await context.close()
+                await _close_publish_context(context)
+    finally:
+        _release()
+
+
+async def _close_publish_context(context) -> None:
+    """Cleanup must never replace the actual submission result with a close error."""
+    try:
+        await asyncio.wait_for(context.close(), timeout=10)
+    except Exception as e:
+        logger.warning("publish browser cleanup: %s", e)
+
+
+async def verify_published_video(title: str) -> dict[str, Any]:
+    """Read management with the existing profile; never upload or press publish."""
+    if not _try_acquire("verify"):
+        return {"ok": False, "busy": True, "message": "浏览器正在使用，请稍后核对"}
+    try:
+        async with async_playwright() as p:
+            context = await p.chromium.launch_persistent_context(
+                user_data_dir=_profile_dir(), headless=False,
+                viewport={"width": 1400, "height": 900}, locale="zh-CN",
+                args=["--disable-blink-features=AutomationControlled", "--window-position=-32000,-32000"],
+            )
+            try:
+                page = context.pages[0] if context.pages else await context.new_page()
+                evidence = await check_management(page, title)
+                shot = await _save_debug_shot(page, "management_verification")
+                return {"ok": bool(evidence), "evidence": evidence, "screenshot": shot,
+                        "message": "已在作品管理核对到该标题" if evidence else "作品管理暂未确认该标题，仍需人工核对"}
+            finally:
+                await _close_publish_context(context)
     finally:
         _release()
 
@@ -604,9 +708,38 @@ async def _form_ready(page: Page) -> bool:
     return False
 
 
+async def _video_still_uploading(page: Page) -> bool:
+    """True while right-rail shows upload progress (上传中 / xx% / MB/s)."""
+    for sel in (
+        "text=上传中",
+        "text=请勿删除",
+        "text=请勿删除/移动文件",
+    ):
+        loc = page.locator(sel).first
+        try:
+            if await loc.count() > 0 and await loc.is_visible():
+                return True
+        except Exception:
+            continue
+    try:
+        # e.g. "59%" next to progress while bytes still climbing
+        pct = page.locator("text=/\\d{1,3}%/").first
+        if await pct.count() > 0 and await pct.is_visible():
+            text = (await pct.inner_text()).strip()
+            num = "".join(ch for ch in text if ch.isdigit())
+            if num and int(num) < 100:
+                # Only treat as uploading if speed / size hint also present
+                for hint in ("MB/s", "KB/s", "MB/", "KB/"):
+                    if await page.locator(f"text={hint}").count() > 0:
+                        return True
+    except Exception:
+        pass
+    return False
+
+
 async def _wait_upload_ready(page: Page, progress: ProgressCb | None = None) -> None:
-    """Wait until publish form is fully loaded (title field visible, not 加载中)."""
-    hard_cap = min(float(settings.upload_timeout_ms) / 1000.0, 180.0)
+    """Wait until publish form is ready AND video file upload finished."""
+    hard_cap = min(float(settings.upload_timeout_ms) / 1000.0, 300.0)
     end = time.time() + hard_cap
     last_log = 0.0
     while time.time() < end:
@@ -618,19 +751,15 @@ async def _wait_upload_ready(page: Page, progress: ProgressCb | None = None) -> 
             await page.wait_for_timeout(1500)
             continue
         if await _form_ready(page):
-            uploading = page.locator("text=上传中").first
-            try:
-                if await uploading.count() > 0 and await uploading.is_visible():
-                    if progress and time.time() - last_log > 5:
-                        progress("视频仍在上传中...")
-                        last_log = time.time()
-                    await page.wait_for_timeout(1500)
-                    continue
-            except Exception:
-                pass
+            if await _video_still_uploading(page):
+                if progress and time.time() - last_log > 5:
+                    progress("视频仍在上传中，等传完再设封面...")
+                    last_log = time.time()
+                await page.wait_for_timeout(1500)
+                continue
             # Stabilize: require title editor still present after short wait
             await page.wait_for_timeout(1200)
-            if await _form_ready(page):
+            if await _form_ready(page) and not await _video_still_uploading(page):
                 return
         if progress and time.time() - last_log > 8:
             progress(f"等待编辑页就绪... url={(page.url or '')[-60:]}")
@@ -894,30 +1023,58 @@ async def _page_has_topics(page: Page, tags: list[str]) -> bool:
     return all(t.lstrip("#") in blob for t in tags)
 
 
-async def _cover_slot_has_image(page: Page, labels: tuple[str, ...]) -> bool:
-    """Heuristic: cover card near label contains a non-tiny img/canvas."""
-    for label in labels:
-        loc = page.locator(f"text={label}").first
-        try:
-            if await loc.count() == 0:
-                continue
-            parent = loc.locator("xpath=ancestor::div[position()<=8][1]")
-            imgs = parent.locator("img")
-            for i in range(min(await imgs.count(), 4)):
-                img = imgs.nth(i)
-                try:
-                    box = await img.bounding_box()
-                    src = (await img.get_attribute("src")) or ""
-                    if box and box.get("width", 0) >= 40 and box.get("height", 0) >= 40:
-                        if src and not src.startswith("data:image/svg"):
-                            return True
-                except Exception:
+async def _confirm_cover_after_file(page: Page, progress: ProgressCb | None = None) -> bool:
+    """After OS file pick, Douyin shows a crop dialog — must click 完成/保存."""
+
+    def prog(msg: str) -> None:
+        if progress:
+            progress(msg)
+
+    await page.wait_for_timeout(800)
+    deadline = time.time() + 20
+    clicked = False
+    while time.time() < deadline:
+        # Broad: any visible primary confirm in overlay (crop UI may not match modal chrome)
+        for sel in (
+            "button:has-text('完成')",
+            "button:has-text('保存')",
+            "button:has-text('确定')",
+            "button:has-text('确认')",
+            "text=完成",
+            "text=保存",
+        ):
+            btn = page.locator(sel).first
+            try:
+                if await btn.count() == 0 or not await btn.is_visible():
                     continue
-            canv = parent.locator("canvas")
-            if await canv.count() > 0:
-                return True
-        except Exception:
-            continue
+                disabled = await btn.get_attribute("disabled")
+                aria = await btn.get_attribute("aria-disabled")
+                if disabled is not None or aria in ("true", "True"):
+                    continue
+                # Avoid main-page 暂存 etc.
+                txt = (await btn.inner_text()).strip()
+                if txt in ("暂存离开", "发布"):
+                    continue
+                prog(f"封面裁剪确认: 点击「{txt or sel}」")
+                await btn.click(timeout=4000)
+                clicked = True
+                await page.wait_for_timeout(1200)
+                break
+            except Exception:
+                continue
+        if clicked:
+            # second confirm if nested
+            if await _cover_modal_open(page) or await page.locator("button:has-text('完成')").count() > 0:
+                try:
+                    again = page.locator("button:has-text('完成'), button:has-text('保存')").first
+                    if await again.count() > 0 and await again.is_visible():
+                        await again.click(timeout=3000)
+                        await page.wait_for_timeout(800)
+                except Exception:
+                    pass
+            return True
+        await page.wait_for_timeout(400)
+    await _save_debug_shot(page, "cover_crop_no_confirm")
     return False
 
 
@@ -931,13 +1088,7 @@ async def _collect_form_facts(
     title_text = await _read_title_text(page)
     topics = settings.publish_hashtag_list or ["#ai编程", "#干货"]
     topics_ok = await _page_has_topics(page, topics)
-    cover_v_ok = await _cover_slot_has_image(page, ("竖封面3:4", "竖封面", "3:4"))
-    cover_h_ok = await _cover_slot_has_image(page, ("横封面4:3", "横封面", "4:3"))
-    missing_tips = await _detect_missing_cover_kinds(page)
-    if "竖" in missing_tips:
-        cover_v_ok = False
-    if "横" in missing_tips:
-        cover_h_ok = False
+    covers = await collect_cover_state(page)
     return {
         "loading": await _page_still_loading(page),
         "cover_modal_open": await _cover_modal_open(page),
@@ -945,61 +1096,81 @@ async def _collect_form_facts(
         "target_title": (target_title or "")[:80],
         "title_ok": bool(title_text.strip()),
         "expect_covers": expect_v or expect_h,
-        "cover_v_ok": cover_v_ok if expect_v else True,
-        "cover_h_ok": cover_h_ok if expect_h else True,
-        "missing_cover_tips": missing_tips,
+        "cover_v_ok": covers["v"]["ok"] if expect_v else True,
+        "cover_h_ok": covers["h"]["ok"] if expect_h else True,
+        "cover_previews": covers,
+        "missing_cover_tips": covers["missing"],
         "topics_ok": topics_ok,
         "url": (page.url or "")[-120:],
     }
 
 
-async def _verify_covers_with_llm(
+async def _verify_covers(
     page: Page,
     *,
     expect_v: bool,
     expect_h: bool,
     progress: ProgressCb | None = None,
+    timeout_ms: int | None = None,
+    poll_ms: int = 1000,
 ) -> dict[str, Any]:
-    """DOM heuristics + DeepSeek text judge (no vision)."""
-    facts = await _collect_form_facts(page, expect_v=expect_v, expect_h=expect_h)
-    dom_ok = (
-        not facts["loading"]
-        and not facts["cover_modal_open"]
-        and facts["cover_v_ok"]
-        and facts["cover_h_ok"]
-    )
-    if progress:
-        progress(
-            f"封面DOM检测 竖={'OK' if facts['cover_v_ok'] else '缺'} "
-            f"横={'OK' if facts['cover_h_ok'] else '缺'}"
+    """Require two stable preview observations; text-only models cannot veto images."""
+    timeout = settings.cover_verify_timeout_ms if timeout_ms is None else timeout_ms
+    deadline = time.monotonic() + max(0, timeout) / 1000
+    attempts: list[dict[str, Any]] = []
+    previous = None
+    stable = 0
+    ok = False
+    last_report = 0.0
+    while True:
+        facts = await _collect_form_facts(page, expect_v=expect_v, expect_h=expect_h)
+        ready = (
+            not facts["loading"]
+            and not facts["cover_modal_open"]
+            and facts["cover_v_ok"]
+            and facts["cover_h_ok"]
         )
+        signature = [
+            facts["cover_previews"][kind].get("preview")
+            for kind, expected in (("v", expect_v), ("h", expect_h)) if expected
+        ]
+        stable = stable + 1 if ready and signature == previous else (1 if ready else 0)
+        previous = signature if ready else None
+        attempts.append({"at": int(time.time() * 1000), "stable": stable, "facts": facts})
+        if stable >= 2:
+            ok = True
+            break
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        if progress and time.monotonic() - last_report >= 5:
+            progress(
+                f"等待封面预览稳定：竖={'已显示' if facts['cover_v_ok'] else '待确认'} "
+                f"横={'已显示' if facts['cover_h_ok'] else '待确认'}"
+            )
+            last_report = time.monotonic()
+        await page.wait_for_timeout(min(max(1, poll_ms), remaining * 1000))
 
-    from app.llm_judge import judge_publish_form
-
+    absent = [name for key, name in (("cover_v_ok", "竖封面"), ("cover_h_ok", "横封面")) if not facts[key]]
+    reason = "封面预览已稳定" if ok else "封面预览确认超时：" + (
+        "、".join(absent) or ("编辑弹窗未关闭" if facts["cover_modal_open"] else "页面或预览仍在更新")
+    )
+    diagnostic_path = None
     try:
-        judged = await asyncio.to_thread(judge_publish_form, facts)
+        out = Path(settings.data_dir) / "debug"
+        out.mkdir(parents=True, exist_ok=True)
+        path = out / f"cover_check_{time.time_ns()}.json"
+        path.write_text(json.dumps({"ok": ok, "reason": reason, "attempts": attempts}, ensure_ascii=False, indent=2), encoding="utf-8")
+        diagnostic_path = str(path.resolve())
     except Exception as e:
-        logger.warning("llm cover judge error: %s", e)
-        judged = {"ok": None, "skipped": True, "reason": str(e)}
-
-    if judged.get("skipped"):
-        # Fall back to DOM only
-        return {
-            "ok": dom_ok if (expect_v or expect_h) else True,
-            "reason": judged.get("reason") or ("DOM通过" if dom_ok else "DOM未检测到封面图"),
-            "facts": facts,
-            "llm": judged,
-        }
-
-    # Combine: LLM ready + cover_ok; if LLM says cover fail, trust it
-    cover_ok = bool(judged.get("cover_ok", dom_ok))
-    if not dom_ok:
-        cover_ok = False
+        logger.warning("save cover diagnostic failed: %s", e)
+    logger.info("cover verification ok=%s attempts=%s diagnostic=%s", ok, len(attempts), diagnostic_path)
     return {
-        "ok": cover_ok,
-        "reason": judged.get("reason") or ("通过" if cover_ok else "未通过"),
+        "ok": ok,
+        "reason": reason,
         "facts": facts,
-        "llm": judged,
+        "diagnosticPath": diagnostic_path,
+        "attemptCount": len(attempts),
     }
 
 
@@ -1019,59 +1190,64 @@ async def _set_covers(
         if progress:
             progress(msg)
 
-    # If a leftover 设置封面 modal is open, save or close first
-    if await _cover_modal_open(page):
-        prog("发现未关闭的封面弹窗，先点「保存」...")
-        if not await _click_cover_save_or_done(page):
-            await _close_cover_modal_if_open(page)
-
-    # Horizontal first — Douyin 快速检测常报「横封面缺失」
-    required: list[tuple[str, Path]] = []
+    # One editor, two file picks. Do not click「完成」until both files are in.
+    steps: list[tuple[str, Path]] = []
     if cover_h:
-        required.append(("横", cover_h))
-    if cover_v:
-        required.append(("竖", cover_v))
+        steps.append(("横", cover_h))
+    if cover_v and (not cover_h or cover_v.resolve() != cover_h.resolve()):
+        steps.append(("竖", cover_v))
+    elif cover_v and not cover_h:
+        steps.append(("竖", cover_v))
+
+    if not steps:
+        return True
+
+    if not await _cover_modal_open(page):
+        first_kind, _ = steps[0]
+        slot = ("横封面4:3", "横封面", "4:3") if first_kind == "横" else ("竖封面3:4", "竖封面", "3:4")
+        prog(f"打开封面编辑器，准备分别上传 {'、'.join(k for k, _ in steps)}")
+        if not await _open_cover_slot(page, slot, kind=first_kind, progress=progress):
+            prog("未打开封面编辑器")
+            await _save_debug_shot(page, "cover_no_modal")
+            return False
 
     ok_all = True
-    for kind, path in required:
-        prog(f"上传{kind}封面: {path.name}")
-        ok = await _upload_one_cover_via_modal(page, kind=kind, image=path, progress=progress)
-        if ok:
-            prog(f"{kind}封面已保存")
-        else:
+    for i, (kind, path) in enumerate(steps):
+        prog(f"第{i + 1}张：单独上传{kind}封面 {path.name}")
+        if not await _switch_cover_tab(page, kind):
+            prog(f"未能切到{kind}封面")
             ok_all = False
-            prog(f"{kind}封面上传失败: {path.name}")
-            await _save_debug_shot(page, f"cover_fail_{kind}")
-            await _close_cover_modal_if_open(page)
-
-    # Platform tip: 横封面缺失 / 竖封面缺失 → one more retry
-    for attempt in range(2):
-        missing = await _detect_missing_cover_kinds(page)
-        if not missing:
             break
-        prog(f"检测到封面缺失提示: {','.join(missing)}，补传…")
-        for kind in missing:
-            path = cover_h if kind == "横" else cover_v
-            if not path:
-                ok_all = False
-                continue
-            ok = await _upload_one_cover_via_modal(page, kind=kind, image=path, progress=progress)
-            if not ok:
-                ok_all = False
-            await page.wait_for_timeout(800)
-        # Re-run 快速检测 if button exists
-        try:
-            recheck = page.locator("text=重新检测").first
-            if await recheck.count() > 0 and await recheck.is_visible():
-                await recheck.click(timeout=2000)
-                await page.wait_for_timeout(1500)
-        except Exception:
-            pass
+        if not await _modal_pick_cover_file(page, path):
+            prog(f"{kind}封面：未点到「上传封面」")
+            await _save_debug_shot(page, f"cover_nofile_{kind}")
+            ok_all = False
+            break
+        # Image applied when「完成」or the other-ratio button lights up. Do not click 完成 yet.
+        if not await _wait_cover_action_ready(page, timeout_ms=40_000):
+            prog(f"{kind}封面选图后编辑器无响应")
+            await _save_debug_shot(page, f"cover_wait_{kind}")
+            ok_all = False
+            break
+        prog(f"{kind}封面已选入编辑器")
 
-    if await _detect_missing_cover_kinds(page):
-        ok_all = False
-        prog("补传后仍有封面缺失提示")
-    return ok_all
+    if not ok_all:
+        await _close_cover_modal_if_open(page)
+        return False
+
+    prog("横竖都已单独选图，点「完成」")
+    if not await _wait_cover_save_enabled(page, timeout_ms=15_000):
+        await _save_debug_shot(page, "cover_done_disabled")
+        await _close_cover_modal_if_open(page)
+        return False
+    if not await _click_cover_save_or_done(page):
+        await _save_debug_shot(page, "cover_done_click")
+        return False
+    for _ in range(16):
+        if not await _cover_modal_open(page):
+            break
+        await page.wait_for_timeout(250)
+    return True
 
 
 async def _detect_missing_cover_kinds(page: Page) -> list[str]:
@@ -1093,37 +1269,43 @@ async def _detect_missing_cover_kinds(page: Page) -> list[str]:
 
 
 async def _cover_modal_open(page: Page) -> bool:
-    # New UI: title「设置封面」+ 保存/重新上传; old UI: 设置竖/横封面
+    """True only for the cover *editor dialog*, not the form section or video 重新上传.
+
+    Bug history: matching「设置封面」+ side-rail「重新上传」falsely claimed the modal
+    was open, so cover upload skipped clicking「选择封面」and later blocked publish.
+    """
+    # Modal tab titles / preview labels — these do not appear on the main form.
     for sel in (
-        "text=设置封面",
         "text=设置竖封面",
         "text=设置横封面",
         "text=竖封面预览",
         "text=横封面预览",
-        "text=重新上传",
-        "button:has-text('保存')",
     ):
-        loc = page.locator(sel).first
+        loc = page.locator(sel)
         try:
-            if await loc.count() == 0 or not await loc.is_visible():
-                continue
-            # Avoid matching the form section label alone — need modal chrome
-            if sel == "text=设置封面":
-                save = page.locator("button:has-text('保存')").first
-                reup = page.locator("text=重新上传").first
-                if (await save.count() > 0 and await save.is_visible()) or (
-                    await reup.count() > 0 and await reup.is_visible()
-                ):
+            for i in range(await loc.count()):
+                if await loc.nth(i).is_visible():
                     return True
-                continue
-            if sel == "button:has-text('保存')":
-                # Save on main page? Prefer when 重新上传 / 设置封面 modal nearby
-                if await page.locator("text=重新上传").count() > 0:
-                    return True
-                continue
-            return True
         except Exception:
             continue
+
+    # Dialog chrome: 重新上传 + 保存 together (exclude video side-rail 重新上传 alone).
+    try:
+        dialogs = page.locator(
+            "[role='dialog'], [class*='modal'], [class*='Modal'], [class*='dialog']"
+        )
+        n = await dialogs.count()
+        for i in range(min(n, 8)):
+            d = dialogs.nth(i)
+            if not await d.is_visible():
+                continue
+            has_reup = await d.locator("text=重新上传").count() > 0
+            has_upload = await d.locator("text=上传封面").count() > 0
+            has_save = await d.locator("button:has-text('保存'), button:has-text('完成')").count() > 0
+            if (has_reup or has_upload) and has_save:
+                return True
+    except Exception:
+        pass
     return False
 
 
@@ -1155,6 +1337,52 @@ async def _close_cover_modal_if_open(page: Page) -> None:
         pass
 
 
+async def _switch_cover_tab(page: Page, kind: str) -> bool:
+    """Switch the open editor to 设置横封面 or 设置竖封面. Does not upload or confirm."""
+    title = "设置竖封面" if kind == "竖" else "设置横封面"
+    preview = "竖封面预览" if kind == "竖" else "横封面预览"
+    loc = page.locator(f"text={title}")
+    try:
+        n = await loc.count()
+    except Exception:
+        n = 0
+    for i in range(n):
+        el = loc.nth(i)
+        try:
+            if not await el.is_visible():
+                continue
+            await el.click(timeout=3000)
+            await page.wait_for_timeout(500)
+            # Confirm the matching preview label is showing
+            prev = page.locator(f"text={preview}").first
+            if await prev.count() == 0 or await prev.is_visible():
+                return True
+        except Exception:
+            continue
+    return n > 0
+
+
+async def _wait_cover_action_ready(page: Page, timeout_ms: int = 40_000) -> bool:
+    """True once 完成 or the other-ratio button is enabled (image accepted, spinner done)."""
+    deadline = time.time() + timeout_ms / 1000
+    while time.time() < deadline:
+        if await _cover_confirm_button(page) is not None:
+            return True
+        for label in ("设置竖封面", "设置横封面"):
+            btn = page.locator(f"button:has-text('{label}')").first
+            try:
+                if await btn.count() == 0 or not await btn.is_visible():
+                    continue
+                if await btn.is_enabled():
+                    cls = ((await btn.get_attribute("class")) or "").lower()
+                    if "disabled" not in cls:
+                        return True
+            except Exception:
+                continue
+        await page.wait_for_timeout(400)
+    return False
+
+
 async def _upload_one_cover_via_modal(
     page: Page,
     *,
@@ -1162,80 +1390,140 @@ async def _upload_one_cover_via_modal(
     image: Path,
     progress: ProgressCb | None = None,
 ) -> bool:
-    """kind = 竖|横. Open cover card → modal → +上传封面 → 完成; fallbacks if modal missing."""
+    """kind = 竖|横.
+
+    Douyin editor (截图): tabs 设置横封面/设置竖封面, center may spin while
+    frames load, black「上传封面」is the real action,「完成」stays gray until
+    a local image is applied. Do not wait on the spinner or click gray 完成.
+    """
 
     def prog(msg: str) -> None:
         if progress:
             progress(msg)
 
     tab_title = "设置竖封面" if kind == "竖" else "设置横封面"
-    # Exact UI labels from Douyin form
     slot_texts = (
-        ("竖封面3:4", "竖封面", "3:4", "封面（竖版）")
+        ("竖封面3:4", "竖封面", "3:4")
         if kind == "竖"
-        else ("横封面4:3", "横封面", "4:3", "封面（横版）")
+        else ("横封面4:3", "横封面", "4:3")
     )
 
     await page.evaluate("window.scrollTo(0, 400)")
-    await page.wait_for_timeout(400)
-    # Scroll 设置封面 into view if present
+    await page.wait_for_timeout(300)
     try:
         sec = page.locator("text=设置封面").first
         if await sec.count() > 0:
             await sec.scroll_into_view_if_needed()
-            await page.wait_for_timeout(300)
     except Exception:
         pass
 
-    if await _cover_modal_open(page):
-        try:
-            tab = page.locator(f"text={tab_title}").first
-            if await tab.count() > 0:
-                await tab.click(timeout=3000)
-                await page.wait_for_timeout(600)
-        except Exception:
-            pass
-    else:
+    if not await _cover_modal_open(page):
+        prog(f"打开{kind}封面编辑器…")
         opened = await _open_cover_slot(page, slot_texts, kind=kind, progress=progress)
         if not opened:
-            # Fallback without modal: file chooser / set_input_files near slot
-            prog(f"{kind}封面弹窗未开，尝试直接选文件...")
-            if await _direct_cover_file_near_slot(page, slot_texts, image):
-                await _confirm_cover_if_possible(page)
-                return True
             prog(f"未打开{kind}封面弹窗")
             await _save_debug_shot(page, f"cover_no_modal_{kind}")
             return False
 
-    # Ensure correct tab
     try:
-        tab = page.locator(f"text={tab_title}").first
-        if await tab.count() > 0:
-            await tab.click(timeout=2500)
-            await page.wait_for_timeout(500)
+        tab = page.get_by_text(tab_title, exact=True).first
+        if await tab.count() > 0 and await tab.is_visible():
+            await tab.click(timeout=3000)
+            await page.wait_for_timeout(400)
     except Exception:
         pass
 
+    prog(f"{kind}封面：点「上传封面」选择 {image.name}")
     uploaded = await _modal_pick_cover_file(page, image)
     if not uploaded:
-        prog(f"{kind}封面：未能选择本地文件")
+        prog(f"{kind}封面：未能点到「上传封面」")
         await _save_debug_shot(page, f"cover_nofile_{kind}")
         return False
 
-    if not await _wait_cover_save_enabled(page, timeout_ms=90_000):
-        prog(f"{kind}封面：等待「保存/完成」可点超时")
+    prog(f"{kind}封面：等「完成」变亮…")
+    if not await _wait_cover_save_enabled(page, timeout_ms=40_000):
+        prog(f"{kind}封面：「完成」一直是灰色")
         await _save_debug_shot(page, f"cover_wait_{kind}")
         return False
-
     if not await _click_cover_save_or_done(page):
-        prog(f"{kind}封面：点击「保存/完成」失败")
+        prog(f"{kind}封面：点击「完成」失败")
+        await _save_debug_shot(page, f"cover_done_click_{kind}")
         return False
-    # Wait modal close
-    for _ in range(20):
+
+    for _ in range(12):
+        # After 完成 the editor may close, or stay open for the other ratio.
         if not await _cover_modal_open(page):
             break
-        await page.wait_for_timeout(300)
+        await page.wait_for_timeout(250)
+    prog(f"{kind}封面已点完成")
     return True
+
+
+async def _pick_cover_via_slot_chooser(
+    page: Page,
+    slot_texts: tuple[str, ...],
+    image: Path,
+    *,
+    kind: str,
+    progress: ProgressCb | None = None,
+) -> bool:
+    """Click「选择封面」inside 横/竖 card and set the local image via file chooser."""
+
+    def prog(msg: str) -> None:
+        if progress:
+            progress(msg)
+
+    for label in slot_texts:
+        loc = page.locator(f"text={label}").first
+        try:
+            if await loc.count() == 0 or not await loc.is_visible():
+                continue
+            await loc.scroll_into_view_if_needed()
+            await page.wait_for_timeout(200)
+            # Prefer a nearby container that also contains 选择封面
+            card = loc.locator(
+                "xpath=ancestor::*[.//text()[contains(.,'选择封面') or contains(.,'上传封面') or contains(.,'修改封面')]][1]"
+            )
+            targets = []
+            if await card.count() > 0:
+                for sub in ("选择封面", "上传封面", "修改封面", "更换封面"):
+                    b = card.locator(f"text={sub}").first
+                    if await b.count() > 0:
+                        targets.append(b)
+            # Also try nth「选择封面」by kind (横=left/0, 竖=right/1)
+            choose_all = page.locator("text=选择封面")
+            n = await choose_all.count()
+            if n > 0:
+                idx = 0 if kind == "横" else min(1, n - 1)
+                targets.append(choose_all.nth(idx))
+                if n > 1 and kind == "竖":
+                    targets.append(choose_all.nth(n - 1))
+
+            for btn in targets:
+                try:
+                    if not await btn.is_visible():
+                        continue
+                    before = await _count_image_inputs(page)
+                    try:
+                        async with page.expect_file_chooser(timeout=5000) as fc_info:
+                            await btn.click(timeout=3000)
+                        chooser = await fc_info.value
+                        await chooser.set_files(str(image))
+                        prog(f"{kind}封面：已通过「选择封面」选文件")
+                        await page.wait_for_timeout(2000)
+                        return True
+                    except Exception:
+                        await btn.click(timeout=3000)
+                        await page.wait_for_timeout(600)
+                        if await _set_image_file_input(page, image, prefer_after=before):
+                            prog(f"{kind}封面：已写入隐藏 file input")
+                            await page.wait_for_timeout(1500)
+                            return True
+                except Exception:
+                    continue
+        except Exception:
+            continue
+    return False
 
 
 async def _open_cover_slot(
@@ -1376,34 +1664,69 @@ async def _confirm_cover_if_possible(page: Page) -> None:
 
 
 async def _modal_pick_cover_file(page: Page, image: Path) -> bool:
-    """Inside cover modal: 上传封面 / 重新上传 + file chooser."""
+    """Inside cover modal: 上传封面 / 重新上传 + file chooser.
+
+    Prefer dialog-scoped locators so we never click the video side-rail「重新上传」.
+    """
+    roots: list[Any] = []
+    try:
+        dialogs = page.locator(
+            "[role='dialog'], [class*='modal'], [class*='Modal'], [class*='dialog']"
+        )
+        n = await dialogs.count()
+        for i in range(min(n, 6)):
+            d = dialogs.nth(i)
+            if await d.is_visible():
+                roots.append(d)
+    except Exception:
+        pass
+    roots.append(page)
+
     upload_sels = (
-        "button:has-text('重新上传')",
-        "text=重新上传",
         "button:has-text('上传封面')",
-        "text=+ 上传封面",
         "text=上传封面",
         "[class*='upload']:has-text('上传封面')",
-        "[class*='upload']:has-text('重新上传')",
+        "div:has-text('上传封面')",
     )
-    for sel in upload_sels:
-        btn = page.locator(sel).first
-        try:
-            if await btn.count() == 0 or not await btn.is_visible():
-                continue
+    # Prefer the black button inside the open editor (not the page behind it).
+    candidates = []
+    for root in roots:
+        for sel in upload_sels:
+            loc = root.locator(sel)
             try:
-                async with page.expect_file_chooser(timeout=4000) as fc_info:
-                    await btn.click(timeout=3000)
+                n = await loc.count()
+            except Exception:
+                continue
+            for i in range(min(n, 6)):
+                candidates.append(loc.nth(i))
+
+    for btn in candidates:
+        try:
+            if not await btn.is_visible():
+                continue
+            txt = ""
+            try:
+                txt = (await btn.inner_text()).strip().replace("\n", "")
+            except Exception:
+                txt = ""
+            if "上传封面" not in txt and "重新上传" not in txt:
+                continue
+            # Skip huge containers that merely contain the label
+            box = await btn.bounding_box()
+            if box and (box.get("width", 0) > 420 or box.get("height", 0) > 120):
+                continue
+            before = await _count_image_inputs(page)
+            try:
+                async with page.expect_file_chooser(timeout=8000) as fc_info:
+                    await btn.click(timeout=4000, force=True)
                 chooser = await fc_info.value
                 await chooser.set_files(str(image))
-                await page.wait_for_timeout(1500)
+                await page.wait_for_timeout(1200)
                 return True
             except Exception:
-                before = await _count_image_inputs(page)
-                await btn.click(timeout=3000)
-                await page.wait_for_timeout(600)
+                await page.wait_for_timeout(400)
                 if await _set_image_file_input(page, image, prefer_after=before):
-                    await page.wait_for_timeout(1500)
+                    await page.wait_for_timeout(1200)
                     return True
         except Exception:
             continue
@@ -1430,7 +1753,8 @@ async def _cover_confirm_button(page: Page):
             disabled = await btn.get_attribute("disabled")
             aria = await btn.get_attribute("aria-disabled")
             cls = ((await btn.get_attribute("class")) or "").lower()
-            if disabled is not None or aria in ("true", "True") or "disabled" in cls:
+            gray = any(x in cls for x in ("disabled", "disable", "semi-button-disabled"))
+            if disabled is not None or aria in ("true", "True") or gray:
                 continue
             try:
                 if not await btn.is_enabled():
@@ -1648,16 +1972,16 @@ _BLOCKER_KW = (
     "转码中",
     "请完成声明",
     "请勾选",
-    "内容由AI生成",
 )
 
 
-async def _visible_any(page: Page, keywords: tuple[str, ...]) -> str | None:
+async def _visible_any(page: Page, keywords: tuple[str, ...], *, exact: bool = False) -> str | None:
     for kw in keywords:
-        loc = page.locator(f"text={kw}").first
+        loc = page.get_by_text(kw, exact=exact)
         try:
-            if await loc.count() > 0 and await loc.is_visible():
-                return kw
+            for i in range(min(await loc.count(), 10)):
+                if await loc.nth(i).is_visible():
+                    return kw
         except Exception:
             continue
     return None
@@ -1769,124 +2093,121 @@ async def _prepare_before_publish(page: Page) -> None:
 async def _click_publish_and_confirm(
     page: Page,
     progress: ProgressCb | None = None,
-    wait_sec: int = 240,
+    wait_sec: float = 90,
+    *,
+    expected_title: str = "",
+    on_submit: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
-    """Click publish; SUCCESS only if navigated to 作品管理 (/content/manage)."""
+    """Submit once, then confirm via response, success notice, or the matching work."""
 
     def prog(msg: str) -> None:
         if progress:
             progress(msg)
 
-    async def click_once() -> bool:
+    captured: dict[str, Any] | None = None
+    pending: set[asyncio.Task] = set()
+
+    async def read_response(response) -> None:
+        nonlocal captured
+        try:
+            payload = await asyncio.wait_for(response.json(), timeout=3)
+            evidence = submission_evidence(payload)
+            if evidence is not None and (captured is None or evidence["ok"]):
+                captured = evidence
+        except Exception:
+            pass
+
+    def track_response(response) -> None:
+        if is_publish_request(response.url, response.request.method):
+            task = asyncio.create_task(read_response(response))
+            pending.add(task)
+            task.add_done_callback(pending.discard)
+
+    def success(evidence: dict) -> dict[str, Any]:
+        return {"ok": True, "message": "发布已提交并确认", "evidence": evidence, "url": page.url}
+
+    def uncertain(message: str) -> dict[str, Any]:
+        return {"ok": False, "unconfirmed": True, "message": message + "；请先核对作品管理，勿重复发布", "url": page.url}
+
+    page.on("response", track_response)
+    try:
         btn = await _find_publish_button(page)
         if btn is None:
-            return False
+            return {"ok": False, "message": "未找到可点的「发布」按钮", "url": page.url}
         try:
             await btn.scroll_into_view_if_needed(timeout=3000)
         except Exception:
             pass
+        if on_submit:
+            on_submit()
         try:
-            await btn.click(timeout=5000)
+            await btn.click(timeout=5000, no_wait_after=True)
         except Exception:
-            return False
-        await page.wait_for_timeout(1200)
-        for confirm in (
-            page.get_by_role("button", name="确认发布", exact=True),
-            page.locator("button:has-text('确认发布')"),
-        ):
-            try:
-                if await confirm.count() > 0 and await confirm.first.is_visible():
-                    await confirm.first.click(timeout=3000)
-                    await page.wait_for_timeout(800)
-                    break
-            except Exception:
-                continue
-        return True
+            if captured and captured.get("ok"):
+                return success(captured)
+            return uncertain("已尝试点击发布，页面响应未确认")
 
-    if not await click_once():
-        await _save_debug_shot(page, "publish_no_button")
-        return {"ok": False, "message": "未找到可点的「发布」按钮", "url": page.url}
-
-    deadline = time.time() + max(wait_sec, 90)
-    verify_hint = False
-    last_blocker = ""
-    retries = 0
-
-    while time.time() < deadline:
-        url = page.url or ""
-
-        # Hard success: must land on content manage.
-        if _is_manage_url(url):
-            return {"ok": True, "message": "发布成功（已进入作品管理）", "url": url}
-
-        # Soft success copy only after leaving editor pages.
-        if not _is_editor_url(url):
-            hit = await _visible_any(page, _SUCCESS_KW)
+        prog("已点击发布，正在确认结果…")
+        deadline = time.monotonic() + max(0, wait_sec)
+        last_report = 0.0
+        confirmed_dialog = False
+        while True:
+            if captured:
+                if captured.get("ok"):
+                    return success(captured)
+                return {"ok": False, "message": captured.get("message") or "抖音拒绝发布", "evidence": captured, "url": page.url}
+            if page.is_closed():
+                return uncertain("提交后浏览器已关闭，结果待核对")
+            hit = await _visible_any(page, _SUCCESS_KW, exact=True)
             if hit:
-                return {"ok": True, "message": f"发布成功（{hit}）", "url": url}
+                return success({"source": "success_notice", "notice": hit})
+            if _is_manage_url(page.url):
+                evidence = await find_work(page, expected_title, timeout_sec=0)
+                if evidence:
+                    return success(evidence)
 
-        blocker = await _visible_any(page, _BLOCKER_KW)
-        if blocker and blocker != last_blocker:
-            last_blocker = blocker
-            prog(f"发布受阻提示：{blocker}")
-            await _prepare_before_publish(page)
+            # A successful submit may reset the uploader instead of navigating to
+            # management. Read the matching work; an empty form alone is no proof.
+            if "/content/upload" in page.url and await _title_editor(page) is None:
+                upload = await _visible_any(page, ("上传视频", "点击上传"), exact=True)
+                if upload:
+                    prog("已回到上传页，正在前往作品管理核对本条视频…")
+                    try:
+                        evidence = await check_management(page, expected_title)
+                    except Exception:
+                        evidence = None
+                    if captured and captured.get("ok"):
+                        return success(captured)
+                    if evidence:
+                        return success(evidence)
+                    return uncertain("提交后已回到上传页，暂未在作品管理确认本条视频")
 
-        vkw = await _visible_any(page, _VERIFY_KW)
-        if vkw:
-            if not verify_hint:
-                verify_hint = True
-                prog(f"抖音要求人工验证（{vkw}），请在浏览器中完成，最长等待 {wait_sec}s")
-                await _save_debug_shot(page, "publish_verify")
-            await page.wait_for_timeout(2000)
-            continue
-
-        # Never spam 发布: cover modal / cover blocker → stop retrying
-        if await _cover_modal_open(page):
-            prog("封面弹窗仍打开，停止重复点击发布")
-            await _save_debug_shot(page, "publish_cover_modal")
-            return {
-                "ok": False,
-                "message": "封面设置弹窗未关闭，未继续点击发布",
-                "url": url,
-            }
-        if last_blocker and any(k in last_blocker for k in ("封面", "标题")):
-            prog(f"表单未就绪（{last_blocker}），停止重复点击发布")
-            return {
-                "ok": False,
-                "message": f"发布受阻：{last_blocker}（未重复点击）",
-                "url": url,
-            }
-
-        # At most one gentle re-click if still on editor and no blocker
-        if _is_editor_url(url) and retries < 1 and not last_blocker and not verify_hint:
-            still = await _find_publish_button(page)
-            if still is not None:
-                try:
-                    if await still.is_enabled():
-                        retries += 1
-                        prog("仍在编辑页，再点一次发布确认...")
-                        await click_once()
-                except Exception:
-                    pass
-
-        await page.wait_for_timeout(2000)
-
-    url = page.url or ""
-    await _save_debug_shot(page, "publish_unconfirmed")
-    if verify_hint:
-        return {
-            "ok": False,
-            "message": "发布被验证码/风控拦住，等待超时未进入作品管理",
-            "url": url,
-        }
-    if last_blocker:
-        return {
-            "ok": False,
-            "message": f"发布未成功，页面提示：{last_blocker}（未进入作品管理）",
-            "url": url,
-        }
-    return {
-        "ok": False,
-        "message": "已点发布但未进入作品管理页，判定为失败。请打开创作者中心核对；截图见 data/debug",
-        "url": url,
-    }
+            # Confirm an explicit secondary dialog once; never press the main
+            # publish button again while its outcome is unknown.
+            if not confirmed_dialog:
+                confirms = page.get_by_role("button", name="确认发布", exact=True)
+                for i in range(await confirms.count()):
+                    if await confirms.nth(i).is_visible():
+                        confirmed_dialog = True
+                        await confirms.nth(i).click(timeout=3000, no_wait_after=True)
+                        break
+            blocker = await _visible_any(page, _BLOCKER_KW)
+            if blocker and any(word in blocker for word in ("封面", "标题")):
+                return {"ok": False, "message": f"发布受阻：{blocker}（未重复点击）", "url": page.url}
+            if await _cover_modal_open(page):
+                return {"ok": False, "message": "封面设置弹窗仍打开，未重复点击发布", "url": page.url}
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                await _save_debug_shot(page, "publish_unconfirmed")
+                return uncertain("发布确认等待超时，结果待核对")
+            if time.monotonic() - last_report >= 5:
+                verification = await _visible_any(page, _VERIFY_KW)
+                prog(f"{'请在浏览器完成验证；' if verification else ''}正在确认发布结果，剩余约 {int(remaining)} 秒")
+                last_report = time.monotonic()
+            await page.wait_for_timeout(min(1000, remaining * 1000))
+    finally:
+        page.remove_listener("response", track_response)
+        for task in list(pending):
+            task.cancel()
+        if pending:
+            await asyncio.gather(*list(pending), return_exceptions=True)

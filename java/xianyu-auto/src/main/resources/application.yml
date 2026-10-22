@@ -2,6 +2,12 @@ server:
   port: ${SERVER_PORT:12400}
   servlet:
     context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-request: true
+      force-response: true
 
 spring:
   application:
@@ -17,7 +23,7 @@ spring:
   # MySQL 数据源（库名 xx_erp，连接信息见 .env）
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:53306}/${MYSQL_DB:xx_erp}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&allowMultiQueries=true
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:53306}/${MYSQL_DB:xx_erp}?useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_general_ci&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&allowMultiQueries=true
     username: ${MYSQL_USER:root}
     password: ${MYSQL_PASSWORD:}
     hikari:

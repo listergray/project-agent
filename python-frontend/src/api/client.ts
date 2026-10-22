@@ -18,12 +18,25 @@ async function parseError(r: Response): Promise<string> {
   }
 }
 
+/** When embedded at https://host/gw/agent/..., APIs must stay under that prefix. */
+function agentPrefix(): string {
+  if (typeof window === 'undefined') return ''
+  const m = window.location.pathname.match(/^(.*?\/gw\/agent)(?=\/|$)/)
+  return m?.[1] ?? ''
+}
+
+function withAgentPrefix(url: string): string {
+  const prefix = agentPrefix()
+  if (!prefix || !url.startsWith('/') || url.startsWith(`${prefix}/`)) return url
+  return `${prefix}${url}`
+}
+
 async function request<T>(
   url: string,
   init?: RequestInit,
   signal?: AbortSignal,
 ): Promise<T> {
-  const r = await fetch(url, { ...init, signal: signal ?? init?.signal })
+  const r = await fetch(withAgentPrefix(url), { ...init, signal: signal ?? init?.signal })
   if (!r.ok) throw new Error(await parseError(r))
   return r.json() as Promise<T>
 }
@@ -72,7 +85,7 @@ async function consumeSse(
   handlers: StreamHandlers,
   signal?: AbortSignal,
 ) {
-  const r = await fetch(url, {
+  const r = await fetch(withAgentPrefix(url), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
     body: JSON.stringify(body),

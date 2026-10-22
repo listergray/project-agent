@@ -1,26 +1,55 @@
 import type { ProLayoutProps } from '@ant-design/pro-components';
 
 /**
- * @name
+ * 全局布局与 Ant Design 主题（序造 paper / ink / lime）
  */
 const Settings: ProLayoutProps & {
   logo?: string;
+  colorWeak?: boolean;
 } = {
   navTheme: 'light',
-  // 拂晓蓝
-  colorPrimary: '#1677ff',
+  colorPrimary: '#1c211d',
   layout: 'mix',
   contentWidth: 'Fluid',
   fixedHeader: false,
   fixSiderbar: true,
   colorWeak: false,
-  // default: assistant mark; project module switches to brand-mark.svg (P) in layout
   title: '\u52a9\u624b\u7cfb\u7edf',
   logo: '/brand-assistant.svg',
   iconfontUrl: '',
   token: {
-    // 参见ts声明，demo 见文档，通过token 修改样式
-    //https://procomponents.ant.design/components/layout#%E9%80%9A%E8%BF%87-token-%E4%BF%AE%E6%94%B9%E6%A0%B7%E5%BC%8F
+    colorBgAppListIconHover: 'rgba(28,33,29,0.06)',
+    colorTextAppListIconHover: '#1c211d',
+    colorTextAppListIcon: '#646960',
+    sider: {
+      colorMenuBackground: '#f4f3ed',
+      colorBgMenuItemHover: '#e4eacd',
+      colorBgMenuItemSelected: '#e4eacd',
+      colorTextMenuSelected: '#1c211d',
+      colorTextMenuItemHover: '#1c211d',
+      colorTextMenu: '#646960',
+      colorTextMenuActive: '#1c211d',
+      colorBgMenuItemCollapsedElevated: '#ffffff',
+      colorTextMenuSecondary: '#646960',
+      paddingInlineLayoutMenu: 12,
+    },
+    header: {
+      colorBgHeader: '#f4f3ed',
+      colorHeaderTitle: '#1c211d',
+      colorTextMenu: '#646960',
+      colorTextMenuSecondary: '#646960',
+      colorTextMenuSelected: '#1c211d',
+      colorBgMenuItemHover: '#e4eacd',
+      colorBgMenuItemSelected: '#e4eacd',
+      colorTextRightActionsItem: '#646960',
+      heightLayoutHeader: 56,
+    },
+    pageContainer: {
+      colorBgPageContainer: '#f4f3ed',
+      paddingBlockPageContainerContent: 24,
+      paddingInlinePageContainerContent: 24,
+    },
+    bgLayout: '#f4f3ed',
   },
 };
 

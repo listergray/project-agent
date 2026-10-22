@@ -44,28 +44,28 @@ public class PmProjectServiceImpl implements IPmProjectService
     @PostConstruct
     public void seed()
     {
-        PmProject p1 = baseSeed("seed-001", "PRJ-2026-DEMO-01", "?????????", "??",
-                "??", "????", 80000.0, PmStatus.DRAFT, "????????????");
+        PmProject p1 = baseSeed("seed-001", "PRJ-2026-DEMO-01", "园区数字化一期项目", "研发",
+                "张三", "研发部门", 80000.0, PmStatus.DRAFT, "用于演示的立项草稿数据");
         p1.setCreatedBy("pm_biz");
         p1.setCreatedByUserId(101L);
         store.put(p1.getId(), p1);
 
-        PmProject p2 = baseSeed("seed-002", "PRJ-2026-DEMO-02", "????????", "??",
-                "??", "????", 250000.0, PmStatus.PENDING_BASIC, "????????????");
+        PmProject p2 = baseSeed("seed-002", "PRJ-2026-DEMO-02", "数据中台建设项目", "实施",
+                "李四", "信息中心", 250000.0, PmStatus.PENDING_BASIC, "用于演示一次审核中的项目");
         p2.setCreatedBy("pm_biz");
         p2.setCreatedByUserId(101L);
-        p2.getHistory().add(new PmHistoryItem(now(), "submitted_basic", "pm_biz", "pm_applicant", "??????"));
+        p2.getHistory().add(new PmHistoryItem(now(), "submitted_basic", "pm_biz", "pm_applicant", "提交一次审核"));
         store.put(p2.getId(), p2);
 
-        PmProject p3 = baseSeed("seed-003", "PRJ-2026-DEMO-03", "????????", "??",
-                "??", "???", 120000.0, PmStatus.BASIC_PASSED, "????????????");
+        PmProject p3 = baseSeed("seed-003", "PRJ-2026-DEMO-03", "运维保障服务项目", "运维",
+                "王五", "运维部", 120000.0, PmStatus.BASIC_PASSED, "用于演示一次审核已通过");
         p3.setCreatedBy("pm_biz");
         p3.setCreatedByUserId(101L);
-        p3.setGoals("???????????");
-        p3.setMembers("??,??");
-        p3.setRiskLevel("?");
+        p3.setGoals("完成基础信息审核并进入扩展信息");
+        p3.setMembers("张三,李四");
+        p3.setRiskLevel("中");
         p3.setPriority("P1");
-        p3.getHistory().add(new PmHistoryItem(now(), "approved_basic", "pm_office", "pm_basic_auditor", "????"));
+        p3.getHistory().add(new PmHistoryItem(now(), "approved_basic", "pm_office", "pm_basic_auditor", "审核通过"));
         store.put(p3.getId(), p3);
     }
 
@@ -145,7 +145,7 @@ public class PmProjectServiceImpl implements IPmProjectService
         PmProject project = store.get(id);
         if (project == null)
         {
-            throw new ServiceException("?????");
+            throw new ServiceException("项目不存在");
         }
         return project;
     }
@@ -155,7 +155,7 @@ public class PmProjectServiceImpl implements IPmProjectService
     {
         if (StringUtils.isEmpty(body.getProjectName()))
         {
-            throw new ServiceException("????????");
+            throw new ServiceException("请填写项目名称");
         }
         PmProject p = new PmProject();
         p.setId(UUID.randomUUID().toString().replace("-", "").substring(0, 16));
@@ -171,7 +171,7 @@ public class PmProjectServiceImpl implements IPmProjectService
         p.setCreatedAt(now());
         p.setUpdatedAt(now());
         p.setHistory(new ArrayList<>());
-        appendHistory(p, "created", "????????");
+        appendHistory(p, "created", "创建基础信息草稿");
         store.put(p.getId(), p);
         return p;
     }
@@ -182,11 +182,11 @@ public class PmProjectServiceImpl implements IPmProjectService
         PmProject p = selectById(body.getId());
         if (!PmStatus.DRAFT.equals(p.getStatus()))
         {
-            throw new ServiceException("????????????");
+            throw new ServiceException("仅草稿状态可修改基础信息");
         }
         assertApplicantOrAdmin(p);
         copyBasic(body, p);
-        appendHistory(p, "updated_basic", "??????");
+        appendHistory(p, "updated_basic", "更新基础信息");
         return p;
     }
 
@@ -197,7 +197,7 @@ public class PmProjectServiceImpl implements IPmProjectService
         assertApplicantOrAdmin(p);
         String next = stateMachine.transit(p.getStatus(), ProjectStateMachine.ACT_SUBMIT_BASIC);
         p.setStatus(next);
-        appendHistory(p, "submitted_basic", "??????");
+        appendHistory(p, "submitted_basic", "提交一次审核");
         return p;
     }
 
@@ -207,7 +207,7 @@ public class PmProjectServiceImpl implements IPmProjectService
         PmProject p = selectById(body.getId());
         if (!(PmStatus.BASIC_PASSED.equals(p.getStatus()) || PmStatus.EXTEND_PASSED.equals(p.getStatus())))
         {
-            throw new ServiceException("????????????????????");
+            throw new ServiceException("当前状态不可填写扩展信息");
         }
         assertApplicantOrAdmin(p);
         p.setGoals(body.getGoals());
@@ -216,7 +216,7 @@ public class PmProjectServiceImpl implements IPmProjectService
         p.setPriority(body.getPriority());
         p.setPurchasePlan(body.getPurchasePlan());
         p.setFinancePlan(body.getFinancePlan());
-        appendHistory(p, "updated_extend", "??????");
+        appendHistory(p, "updated_extend", "更新扩展信息");
         return p;
     }
 
@@ -227,11 +227,11 @@ public class PmProjectServiceImpl implements IPmProjectService
         assertApplicantOrAdmin(p);
         if (StringUtils.isEmpty(p.getGoals()))
         {
-            throw new ServiceException("???????????????");
+            throw new ServiceException("请先填写项目目标后再提交");
         }
         String next = stateMachine.transit(p.getStatus(), ProjectStateMachine.ACT_SUBMIT_EXTEND);
         p.setStatus(next);
-        appendHistory(p, "submitted_extend", "??????");
+        appendHistory(p, "submitted_extend", "提交二次审核");
         return p;
     }
 
@@ -242,7 +242,7 @@ public class PmProjectServiceImpl implements IPmProjectService
         assertApplicantOrAdmin(p);
         String next = stateMachine.transit(p.getStatus(), ProjectStateMachine.ACT_SUBMIT_PURCHASE);
         p.setStatus(next);
-        appendHistory(p, "submitted_purchase", "??????");
+        appendHistory(p, "submitted_purchase", "提交购买联审");
         return p;
     }
 
@@ -251,26 +251,26 @@ public class PmProjectServiceImpl implements IPmProjectService
     {
         if (request == null || StringUtils.isEmpty(request.getId()) || StringUtils.isEmpty(request.getStage()))
         {
-            throw new ServiceException("???????");
+            throw new ServiceException("审核参数不完整");
         }
         String action = request.getAction();
         if (!"approve".equals(action) && !"reject".equals(action))
         {
-            throw new ServiceException("action ??? approve / reject");
+            throw new ServiceException("action 只能是 approve / reject");
         }
         ReviewStrategy strategy = reviewStrategyFactory.get(request.getStage());
         strategy.assertAuthorized();
         PmProject p = selectById(request.getId());
         if (!strategy.expectedStatus().equals(p.getStatus()))
         {
-            throw new ServiceException("?????????????????=" + p.getStatus());
+            throw new ServiceException("当前状态不允许该审核，status=" + p.getStatus());
         }
         strategy.beforeReview(p, action, request.getComment());
         String machineAction = "approve".equals(action) ? strategy.approveAction() : strategy.rejectAction();
         String next = stateMachine.transit(p.getStatus(), machineAction);
         p.setStatus(next);
         String note = StringUtils.isEmpty(request.getComment())
-                ? ("approve".equals(action) ? "??" : "??")
+                ? ("approve".equals(action) ? "通过" : "驳回")
                 : request.getComment();
         appendHistory(p, action + "_" + request.getStage(), note);
         return p;
@@ -305,7 +305,7 @@ public class PmProjectServiceImpl implements IPmProjectService
             dest.setProjectCode(src.getProjectCode());
         }
         dest.setProjectName(src.getProjectName());
-        dest.setProjectType(StringUtils.isEmpty(src.getProjectType()) ? "??" : src.getProjectType());
+        dest.setProjectType(StringUtils.isEmpty(src.getProjectType()) ? "研发" : src.getProjectType());
         dest.setOwner(src.getOwner());
         dest.setDepartment(src.getDepartment());
         dest.setBudget(src.getBudget() == null ? 0D : src.getBudget());
@@ -327,6 +327,6 @@ public class PmProjectServiceImpl implements IPmProjectService
         {
             return;
         }
-        throw new ServiceException("???????");
+        throw new ServiceException("无权操作该项目");
     }
 }

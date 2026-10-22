@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @name umi route config
  * @doc https://umijs.org/docs/guides/routes
  * NOTE: path '*' must be last or it swallows dynamic menu routes.

@@ -19,7 +19,7 @@ export function Shell() {
     <div className="shell-bg">
       <header className="spine">
         <NavLink to="/" className="spine-brand" end>
-          我的所有
+          人生指南
         </NavLink>
         <nav>
           <AssetMenu />

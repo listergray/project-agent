@@ -103,6 +103,25 @@ public class ProductController {
         return CommonResult.success(xianyuItemService.syncFromXianyu(accountId));
     }
 
+    /** 新建并发布到闲鱼 */
+    @PostMapping("/publish/{accountId}")
+    public CommonResult<Product> publish(@PathVariable Long accountId, @RequestBody Product draft) {
+        return CommonResult.success(xianyuItemService.publishNew(accountId, draft));
+    }
+
+    /** 已上架商品同步标题与描述 */
+    @PostMapping("/{id}/update-live")
+    public CommonResult<Product> updateLive(@PathVariable Long id, @RequestParam Long accountId) {
+        return CommonResult.success(xianyuItemService.updateLiveCopy(accountId, id));
+    }
+
+    /** 本地草稿重新发布到闲鱼 */
+    @PostMapping("/{id}/republish")
+    public CommonResult<Product> republish(@PathVariable Long id,
+                                           @RequestParam Long accountId) {
+        return CommonResult.success(xianyuItemService.republish(accountId, id));
+    }
+
     @PostMapping("/{id}/shelf")
     public CommonResult<Void> shelf(@PathVariable Long id,
                                     @RequestParam boolean onSale,

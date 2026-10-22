@@ -20,6 +20,12 @@ server:
   servlet:
     # 应用的访问路径
     context-path: /
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+      force-request: true
+      force-response: true
   tomcat:
     # tomcat的URI编码
     uri-encoding: UTF-8
@@ -51,6 +57,7 @@ spring:
   messages:
     # 国际化资源文件路径
     basename: i18n/messages
+    encoding: UTF-8
   profiles:
     active: druid
   # 文件上传

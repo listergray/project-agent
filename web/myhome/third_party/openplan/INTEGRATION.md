@@ -1,4 +1,4 @@
-# OpenPlan3D（嵌入「我的所有」）
+# OpenPlan3D（嵌入「人生指南」）
 
 基于 [laanlabs/open3dFloorplan](https://github.com/laanlabs/open3dFloorplan)（MIT）的专业 2D/3D 户型编辑器。
 
