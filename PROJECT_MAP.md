@@ -113,6 +113,8 @@ sihuo ── 待实施：私活入口、资料索引、需求与交付管理 ─
 
 ## 7. 变更记录
 
+- 2026-11-13：定时 tick 走 `https://geime.fun/gw/ruoyi/agent/todo`（`AGENT_TODO_BASE` 未设置）。当时 approved 仅 2 条，均已写回。`todo-20261112-fe283` 维持 2026-11-11 结论：只推序造企业展示型官网（草案 1500–3000 元/单，价格未确认）；软考章节只作排期，不作收入。云端 Task 无 `director` 类型，由 generalPurpose 按总监简报完成。`todo-20261109-example-pending` 为已批准的部署示例，payload 为空，未执行部署或生产变更。门户实时队列与仓库 YAML 快照不一致，以 HTTP 为准。本轮未改业务代码。
+
 - 2026-11-13：Agent 待办 `/agent/todo/**` 改为匿名可访问；定时 tick 改为 HTTP 拉/写（`geime.fun/gw/ruoyi` 或本机 `:8088`），与门户 `/portal/todo` 实时同源，不再依赖云端读 Git YAML 快照。存储仍为本地 `docs/TODO_AGENT_QUEUE.yaml`。
 
 - 2026-11-10：总监两条 approved 待办（功能集成、整体方向/盈利）此前未跑，因为扫描 Automation 未建、本会话也未 tick。本会话手动 tick 后均 `done`。结论（方案级，未改业务代码）：集成=门户编排不并仓，缺口是 sihuo 一期入口；现阶段优先闲鱼跟单与授权后的序造获客，成片按 ES→Grafana→XXL-JOB→Nacos；无账面成交。队列 `todo-20261109-fcb3f` / `todo-20261109-6ba91`。仍未代建云端 Automation。
