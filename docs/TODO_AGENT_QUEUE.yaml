@@ -1,0 +1,175 @@
+# Agent 待办队列（门户「任务待办」与 Cursor 扫描共用）
+# 规范见 docs/AGENT_TODO_RUNBOOK.md
+version: 1
+defaults:
+  max_per_tick: 3
+  require_approval_kinds:
+   - deploy
+   - production
+   - data_migrate
+items:
+ - id: todo-20261112-f8f92
+   title: 外网子系统 /gw 入口冒烟清单
+   kind: qa
+   status: approved
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   assignee_agent: qa-tester
+   created_at: '2026-11-12T15:14:46.1255914+08:00'
+   updated_at: '2026-11-12T15:14:47.5580387+08:00'
+ - id: todo-20261112-fe283
+   title: 帮我找一个盈利方向，我要怎么做，充分分析可行性
+   kind: docs
+   status: approved
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   assignee_agent: director
+   created_at: '2026-11-12T15:13:52.8779998+08:00'
+   updated_at: '2026-11-12T15:14:00.4956259+08:00'
+ - id: todo-20261111-3c4ef
+   title: 帮我找一个盈利方向，我要怎么做，充分分析可行性
+   kind: docs
+   status: done
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   result: |
+     只推序造「企业展示型官网」：卖给能出文案和图片的小企业或工作室。交付 1 个中文单页（最多 5 个模块）、双端适配、1 个联系入口、源码和一次部署。价格带用草案 1500–3000 元/单，用户确认一个整数后再标价。199/599 月费不对外。5 元视频客单极低，成片是漏斗不是利润中心。
+     可行性：官网与六图在本地；价未确认、获客稿未发、软件开发类目未核、无已确认客户。闲鱼 2026-10-19 读回 5 元视频在售（商品 1091134951396，自动发货关），记录无订单字段。90 天有条件拿到这一方向的第一单，前提是两周内确认价格并授权发出 1 条可咨询信息。本轮未打开订单页，不新写成交笔数。
+     步骤：1) 确认价格，写明不含后台、表单、支付、小程序，开发费验收后付，云资源客户自付。2) 闲鱼能上网站开发就用现有六图上架 1 条，自动发货关；不能上就用同一套六图发 1 条小红书，读回标题和价格。3) 咨询只记渠道、用途、预算、下一步；30 天没有就记「无咨询」。4) 有可做的单再交付 1 个单页，开发费与云资源分开记。
+     不做：不建私活门户、不加模块、不并仓；不扩 5 元视频、不自动发货、不新发另外 3 个草稿；不用技术栈成片冲本轮收入；未授权不代登录、不代发布。本轮不派工。
+     证据：docs/VIDEO_SALES_OFFER.md；outputs/video_sales_20261018/闲鱼上架记录.json；E:/ai-pro/sihuo/marketing/launch/；D:/qclaw/animation-pro/TOPIC_PRIORITY.md；前序 todo-20261109-6ba91。未验证：今日是否仍在售、成交笔数、软件类目、账面收入。
+     子 Agent：总监盈利方向 565462f9-42f5-4909-8c4c-3b344a9a83fa
+   assignee_agent: director
+   created_at: '2026-11-11T21:34:19.9863475+08:00'
+   updated_at: '2026-11-11T22:05:00+08:00'
+ - id: todo-20261111-9671e
+   title: 能否集成一个模块，将java高级开发面试题整合进来，还有考研的各个科目题，还有软件设计师的考题
+   kind: docs
+   status: done
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   result: |
+     暂不做。不新建考试题模块，不进门户，也不进三个仓库。当前缺口是第一条付费单和 sihuo 一期入口，不是题库。
+     Java 面试、考研、软件设计师都不形成 sihuo 的线索、报价或交付。animation-pro 成片顺序仍是 ES、Grafana、XXL-JOB、Nacos，不改拍面试或考研。
+     版权单独否决整库搬入：软考真题、考研真题和教材原文不能进入仓库或门户。自己整理的知识点、公开考纲和正规来源链接可以留在本地个人笔记，不单独立项。
+     不做：不采集或导入真题、教材章节、付费题库和他人原文；不做刷题、组卷、错题本、评分或付费；不把人生指南、闲鱼或立项改成学习系统；不把考题拍进 EP。
+     本轮不派工。证据：PROJECT_MAP.md、AGENTS.md、docs/SIHUO_INTEGRATION_PLAN.md、门户 Home 现有入口无考题。全库检索无面试/考研/软设题库。
+     子 Agent：总监考试题库取舍 fec28f44-d3cd-4387-b136-fd77e9bab13b
+   assignee_agent: director
+   created_at: '2026-11-11T21:33:32.1525398+08:00'
+   updated_at: '2026-11-11T22:05:00+08:00'
+ - id: todo-20261109-fcb3f
+   title: 功能集成
+   kind: docs
+   status: done
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   result: |
+     门户编排而非源码融合。已接入子系统保持独立嵌入；下一刀只切 sihuo 一期工作台入口。
+     应做：P0 守住门户/网关契约；P1 sihuo 一期卡片+资料索引（不搬仓）；P2 抖音走 EP、小红书不混扫。
+     不做：三仓合并、立项当私活交付、宣传片进 EP、人生指南/闲鱼并入 PM。
+     派工：tech-lead 评一期边界；PM 对照接入方案验收；UI 卡片与现有外框一致；QA 回归六入口。
+     子 Agent：总监功能集成 26de5e96-3dff-4359-b025-429865c76a36
+   assignee_agent: director
+   created_at: '2026-11-09T23:28:27.8149408+08:00'
+   updated_at: '2026-11-10T12:42:09.935954+08:00'
+ - id: todo-20261109-53f9
+   title: 界面是否存在不统一的地方？
+   kind: ui
+   status: approved
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   assignee_agent: ui-designer
+   created_at: '2026-11-09T23:16:13.1458354+08:00'
+   updated_at: '2026-11-12T15:14:34.382521+08:00'
+ - id: todo-20261109-ec40b
+   title: 每个项目目标应该是什么？
+   kind: pm
+   status: approved
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   assignee_agent: project-manager
+   created_at: '2026-11-09T23:15:54.5799627+08:00'
+   updated_at: '2026-11-12T15:14:25.0166272+08:00'
+ - id: todo-20261109-b38d8
+   title: 项目整体架构是否混乱，有什么不足，需要调整？
+   kind: general
+   status: approved
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   assignee_agent: tech-lead
+   created_at: '2026-11-09T23:15:27.4033784+08:00'
+   updated_at: '2026-11-12T15:14:15.1997241+08:00'
+ - id: todo-20261109-6ba91
+   title: 系统整体方向上有什么可以推进？哪个方向好盈利？
+   kind: docs
+   status: done
+   priority: 5
+   payload: {
+     }
+   notes: ''
+   result: |
+     系统已够用；缺对外售卖与第一条付费单，不是更多模块。
+     P0：闲鱼视频制作跟单（已上架5元，无成交记录）；用户授权后发序造获客素材。
+     P1：成片按 ES→Grafana→XXL-JOB→Nacos。P2：sihuo 一期门户不抢 P0。
+     盈利排序（无账面成交）：官网私活推测最高；闲鱼已上架客单极低；EP 是漏斗非利润中心。
+     派工：long-video 做 ES 集；授权后再上架/跟单。tech-lead/财务本轮不派。
+     子 Agent：总监盈利方向 d958c9e2-c350-4454-b2bc-22d6ca16ae9d
+   assignee_agent: director
+   created_at: '2026-11-09T23:14:55.1028358+08:00'
+   updated_at: '2026-11-10T12:42:09.935954+08:00'
+ - id: todo-20261109-smoke-gw
+   title: 外网子系统 /gw 入口冒烟清单
+   kind: qa
+   status: done
+   priority: 10
+   payload:
+     reference: docs/AGENT_TODO_RUNBOOK.md
+     targets:
+      - https://geime.fun/gw/douyin/
+      - https://geime.fun/gw/xianyu/
+      - https://geime.fun/gw/xhs/
+      - https://geime.fun/gw/myhome/
+     local_fallback:
+      - http://127.0.0.1:9080/gw/douyin/
+      - http://127.0.0.1:8000/gw/douyin/
+     deliverables:
+      - 每项 HTTP 状态与是否为目标 HTML（非门户 SPA）
+      - 缺陷列表（若有）
+      - 验收结论 通过/有条件通过/不通过
+   notes: 首次 SuperAgent 轻量队列试跑
+   result: |
+     2026-11-09 tick：geime.fun 四条 /gw/* 均 HTTP 200 subsystem_html_ok；
+     本机 :8000/:9080 /gw/douyin/ 200。验收：通过。
+     脚本 scripts/smoke_gw_subsystems.py
+   assignee_agent: qa-tester
+   created_at: '2026-11-09T13:30:00+08:00'
+   updated_at: '2026-11-09T13:45:00+08:00'
+ - id: todo-20261109-example-pending
+   title: 示例：需人工批准后再执行（部署类）
+   kind: deploy
+   status: approved
+   priority: 0
+   payload: {
+     }
+   notes: 把 status 改为 approved 后才会被定时扫描执行
+   result: ''
+   assignee_agent: generalPurpose
+   created_at: '2026-11-09T13:30:00+08:00'
+   updated_at: '2026-11-12T15:14:57.3814946+08:00'
