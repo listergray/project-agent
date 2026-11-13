@@ -17,7 +17,7 @@
 
 - 新建默认为 `pending`（只排队）
 - 点 **批准执行** → `approved`，下一次扫描才会跑
-- 与 YAML 为**同一文件**；网页保存后 Cursor Automation / 会话 tick 立刻能读到
+- 后端文件仍是 `docs/TODO_AGENT_QUEUE.yaml`；**定时 tick 必须走 HTTP** `/agent/todo/*`（匿名），与门户实时一致，不要只读 Git 快照
 
 ## 添加待办
 
@@ -58,14 +58,21 @@
 
 派工方式：主 Agent 在本会话用 **Task**，`subagent_type` 与上表一致；`description` 写明队列 `id` 与 `payload`。
 
+## HTTP 接口（匿名，与门户同源）
+
+| 方法 | 路径 | 作用 |
+|------|------|------|
+| GET | `/agent/todo/list?status=approved` | 拉已批准 |
+| PUT | `/agent/todo/{id}/status` | 改状态（body: `{"status":"in_progress"}`） |
+| PUT | `/agent/todo` | 更新整项（含 `result`） |
+
+本机：`http://127.0.0.1:8088`；外网：`https://geime.fun/gw/ruoyi`。
+
 ## 定时扫描（推荐：Cursor Automation）
 
-1. Cursor → **Automations** → 新建。
-2. **Trigger**：Schedule，例如每 **30 分钟**（或 `0 9,14,20 * * *` 每天三次）。
-3. **Repository**：`project_agent`，分支当前常用分支。
-4. **Instructions**：执行 [AGENT_TODO_TICK.md](AGENT_TODO_TICK.md)（或粘贴 Automation 草稿正文，逻辑须与 tick 一致）。
-5. 启用 **Task** 子 Agent（若 UI 可选工具/Agent）。
-6. 保存后先 **Run once** 试跑。
+1. Cursor → **Automations** → 按 [AGENT_TODO_TICK.md](AGENT_TODO_TICK.md) 配置，**Trigger** 每 30 分钟。
+2. Instructions 必须写清：用 HTTP 拉/写待办，不要只读仓库 YAML。
+3. 保存后 **Run once** 试跑。
 
 云 Automation 无法操作本机 `:12500` Playwright 时，相关事项标 **failed** 并在 `result` 写明「需本机 Agent」。
 
@@ -81,11 +88,10 @@
 
 ## 主 Agent 每 tick 摘要（逻辑）
 
-1. 读取 `docs/TODO_AGENT_QUEUE.yaml`。
-2. 筛选 `status: approved`（且 kind 不在 `require_approval_kinds` 时仍为 approved；在名单内也必须已是 approved）。
-3. 按 `priority` 降序，最多 `defaults.max_per_tick` 条。
-4. 每条：改 `in_progress` → Task 子 Agent → 写回 `done`/`failed` + `result`。
-5. 若有实质结论，在 [PROJECT_MAP.md](../PROJECT_MAP.md) **变更记录** 加一行（可选，重大项必加）。
+1. `GET {BASE}/agent/todo/list?status=approved`。
+2. 按 `priority` 降序，最多 `defaults.max_per_tick` 条。
+3. 每条：`PUT .../status` → `in_progress` → Task 子 Agent → `PUT /agent/todo` 写 `done`/`failed` + `result`。
+4. 若有实质结论，在 [PROJECT_MAP.md](../PROJECT_MAP.md) **变更记录** 加一行（可选，重大项必加）。
 
 ## 安全
 

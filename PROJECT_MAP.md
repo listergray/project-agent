@@ -113,6 +113,8 @@ sihuo ── 待实施：私活入口、资料索引、需求与交付管理 ─
 
 ## 7. 变更记录
 
+- 2026-11-13：Agent 待办 `/agent/todo/**` 改为匿名可访问；定时 tick 改为 HTTP 拉/写（`geime.fun/gw/ruoyi` 或本机 `:8088`），与门户 `/portal/todo` 实时同源，不再依赖云端读 Git YAML 快照。存储仍为本地 `docs/TODO_AGENT_QUEUE.yaml`。
+
 - 2026-11-10：总监两条 approved 待办（功能集成、整体方向/盈利）此前未跑，因为扫描 Automation 未建、本会话也未 tick。本会话手动 tick 后均 `done`。结论（方案级，未改业务代码）：集成=门户编排不并仓，缺口是 sihuo 一期入口；现阶段优先闲鱼跟单与授权后的序造获客，成片按 ES→Grafana→XXL-JOB→Nacos；无账面成交。队列 `todo-20261109-fcb3f` / `todo-20261109-6ba91`。仍未代建云端 Automation。
 
 - 2026-11-13：视频优先改为软考软件设计师章节（参考李阿妹课程目录结构）；旁白云扬 **+0%**、吐字清晰带顿挫。首集 EP55「数据的表示」已交付约 178.57s。中间件队列（ES 等）暂缓。见 `SOFT_EXAM_SERIES.md`、`TOPIC_PRIORITY.md`。

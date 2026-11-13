@@ -1,42 +1,65 @@
 # Agent 待办 tick（主 Agent / Router）
 
-你是一次 **定时扫描** 的主 Agent。严格执行下列步骤，用简体中文写回仓库。
+你是一次 **定时扫描** 的主 Agent。严格执行下列步骤，用简体中文汇报。
 
-## 1. 读取队列
+**数据源：HTTP 接口（与门户 `/portal/todo` 同一后端）**，不要只读 Git 仓库里的 YAML 快照。
 
-- 文件：仓库内 `docs/TODO_AGENT_QUEUE.yaml`（与门户「任务待办」同一文件）
-- 解析 `defaults.max_per_tick` 与 `defaults.require_approval_kinds`
+## 0. 基址
 
-## 2. 筛选待执行
+按顺序选用第一个可达的基址（后面路径以 `/agent/todo` 开头）：
 
-- `status` 必须为 `approved`
-- 按 `priority` 降序排序
-- 取前 `max_per_tick` 条（默认 3）
+1. `https://geime.fun/gw/ruoyi`
+2. `http://127.0.0.1:8088`
+3. 若环境变量 / 密钥里有 `AGENT_TODO_BASE`，优先用它（勿打印密钥）
+
+接口 **不鉴权**。写回必须走接口，保证门户立刻看到状态。
+
+## 1. 拉取待执行
+
+```http
+GET {BASE}/agent/todo/list?status=approved
+```
+
+解析 JSON：`data.defaults.max_per_tick`、`data.items`。
+
+- 只处理 `status === "approved"`
+- 按 `priority` 降序
+- 取前 `max_per_tick` 条（缺省 3）
 
 若无条目：回复「本 tick 无 approved 待办」并结束。
 
-## 3. 逐条执行
+## 2. 逐条执行
 
 对每条 `item`：
 
-1. 将 `status` 更新为 `in_progress`，`updated_at` 为当前时间（ISO8601 +08:00），写回 YAML。
+1. 认领：
+   ```http
+   PUT {BASE}/agent/todo/{id}/status
+   Content-Type: application/json
+   {"status":"in_progress"}
+   ```
 2. 调用 **Task** 子 Agent：
    - `subagent_type` = `item.assignee_agent`（仅允许：director、tech-lead、project-manager、finance、ui-designer、qa-tester、long-video、explore、generalPurpose）
-   - 任务描述含：`id`、`title`、完整 `payload`，并要求子 Agent 返回可写入 `result` 的摘要
-3. 根据子 Agent 结果：
-   - 成功 → `status: done`
-   - 失败或阻塞 → `status: failed`
-   - `result`：摘要 + 证据路径（日志、URL、命令输出）
-   - 更新 `updated_at`
-4. 写回 `docs/TODO_AGENT_QUEUE.yaml`（保持 UTF-8，勿删其它条目）
+   - 描述含：`id`、`title`、完整 `payload`，要求返回可写入 `result` 的摘要（≤2000 字）
+3. 写回结果：
+   ```http
+   PUT {BASE}/agent/todo
+   Content-Type: application/json
+   {
+     "id": "<id>",
+     "status": "done|failed",
+     "result": "<摘要+证据>"
+   }
+   ```
 
-## 4. 收尾
+## 3. 收尾
 
 - 向用户简短汇报：处理了哪些 `id`、结论如何
-- 若涉及外网/架构变更：在 `PROJECT_MAP.md` 变更记录追加一行（事实 + 日期）
+- 若涉及外网/架构变更：在 `PROJECT_MAP.md` 变更记录追加一行（事实 + 日期），并尽量提交
 
 ## 禁止
 
-- 不要执行 `status: pending` 或 `cancelled` 的项
+- 不要执行 `pending` / `cancelled`
 - 不要未经 approved 执行 `deploy` / `production` / `data_migrate`
-- 不要将密钥写入 YAML
+- 不要将密钥写入 `result` / 仓库
+- 本机专属（Playwright、扫码、本机端口）云环境做不到 → `failed`，`result` 写明「需本机 IDE Agent」
